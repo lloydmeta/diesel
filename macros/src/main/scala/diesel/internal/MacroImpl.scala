@@ -20,7 +20,7 @@ object MacroImpl {
             val abstractMembers = getAbstractMembers(template)
             if (abstractMembers.isEmpty) {
               abort(
-                s"Did not find any abstract members with ${tparam} return type. Add some.")
+                s"Did not find any abstract members with $tparam return type. Add some.")
             }
             val concreteMembers = getConcreteMembers(template)
             if (concreteMembers.nonEmpty) {
@@ -51,8 +51,7 @@ object MacroImpl {
 
   private class TypedContext(tparam: Type.Param, template: Template) {
 
-    private val tparamName: Param.Name = tparam.name
-    private val tParamAsType = Type.fresh.copy(tparam.name.value)
+    private val tparamName = tparam.name.value
 
     def ensureSoundMembers(): Unit = {
       for {
@@ -131,22 +130,21 @@ object MacroImpl {
     }
 
     def getAbstractMembers(template: Template): List[Decl] = {
-      val typeParamName = tparam.name.value
       template.stats
         .map { stats =>
           stats.collect {
             case m @ Decl.Def(_, _, _, _, Type.Apply(retName: Type.Select, _))
-                if retName.name.value == typeParamName =>
+                if retName.name.value == tparamName =>
               m
             case v @ Decl.Val(_, _, Type.Apply(retName: Type.Select, _))
-                if retName.name.value == typeParamName =>
+                if retName.name.value == tparamName =>
               v
 
             case m @ Decl.Def(_, _, _, _, Type.Apply(retName: Type.Name, _))
-                if retName.value == typeParamName =>
+                if retName.value == tparamName =>
               m
             case v @ Decl.Val(_, _, Type.Apply(retName: Type.Name, _))
-                if retName.value == typeParamName =>
+                if retName.value == tparamName =>
               v
           }.toList
         }
@@ -154,8 +152,6 @@ object MacroImpl {
     }
 
     def generateDslWrappers(decl: List[Decl]) = {
-      val typeParamName = tparam.name.value
-
       def buildWrappedDef(mods: Seq[Mod],
                           name: Term.Name,
                           paramss: Seq[Seq[Term.Param]],
@@ -215,12 +211,12 @@ object MacroImpl {
                       tparams,
                       paramss,
                       Type.Apply(retName: Type.Select, declTargs))
-            if retName.name.value == typeParamName =>
+            if retName.name.value == tparamName =>
           buildWrappedDef(mods, name, paramss, tparams, declTargs)
         case Decl.Val(mods,
                       pats @ Seq(patName, _ @_ *),
                       Type.Apply(retName: Type.Select, declTargs))
-            if retName.name.value == typeParamName =>
+            if retName.name.value == tparamName =>
           buildWrappedVal(mods, pats, declTargs)
 
         case Decl.Def(mods,
@@ -228,12 +224,12 @@ object MacroImpl {
                       tparams,
                       paramss,
                       Type.Apply(retName: Type.Name, declTargs))
-            if retName.value == typeParamName =>
+            if retName.value == tparamName =>
           buildWrappedDef(mods, name, paramss, tparams, declTargs)
         case v @ Decl.Val(mods,
                           pats,
                           Type.Apply(retName: Type.Name, declTargs))
-            if retName.value == typeParamName =>
+            if retName.value == tparamName =>
           buildWrappedVal(mods, pats, declTargs)
       }
     }
