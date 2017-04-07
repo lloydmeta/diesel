@@ -1,4 +1,4 @@
-# Diesel
+# Diesel [![Build Status](https://travis-ci.org/lloydmeta/diesel.svg?branch=master)](https://travis-ci.org/lloydmeta/diesel)
 
 Boilerplate free Finally Tagless DSL annotation.
 
