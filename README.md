@@ -1,6 +1,6 @@
 # Diesel [![Build Status](https://travis-ci.org/lloydmeta/diesel.svg?branch=master)](https://travis-ci.org/lloydmeta/diesel)
 
-Boilerplate free Finally Tagless DSL annotation.
+Boilerplate free Finally Tagless DSL macro annotation, written in [scala.meta](http://scalameta.org/) for future compatibility and other nice things (like free IDE support).
 
 WIP
 
