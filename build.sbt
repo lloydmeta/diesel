@@ -11,6 +11,17 @@ libraryDependencies ++= Seq(
   "org.scalatest" %% "scalatest" % "3.2.0-SNAP4" % Test
 )
 
+// Define macros in this project.
+lazy val macros = project.settings(
+  metaMacroSettings,
+  // A dependency on scala.meta is required to write new-style macros, but not
+  // to expand such macros.  This is similar to how it works for old-style
+  // macros and a dependency on scala.reflect.
+  libraryDependencies ++= Seq(
+    "org.scalameta" %% "scalameta" % "1.6.0",
+    "org.scalatest" %% "scalatest" % "3.2.0-SNAP4" % Test
+  )
+)
 
 lazy val metaMacroSettings: Seq[Def.Setting[_]] = Seq(
   // New-style macro annotations are under active development.  As a result, in
@@ -29,18 +40,6 @@ lazy val metaMacroSettings: Seq[Def.Setting[_]] = Seq(
   // temporary workaround for https://github.com/scalameta/paradise/issues/55
   sources in (Compile, doc) := Nil // macroparadise doesn't work with scaladoc yet.
 )
-
-// Define macros in this project.
-lazy val macros = project.settings(
-  metaMacroSettings,
-  // A dependency on scala.meta is required to write new-style macros, but not
-  // to expand such macros.  This is similar to how it works for old-style
-  // macros and a dependency on scala.reflect.
-  libraryDependencies += "org.scalameta" %% "scalameta" % "1.6.0"
-)
-
-// Use macros in this project.
-lazy val app = project.settings(metaMacroSettings).dependsOn(macros)
 
 initialCommands := "import diesel.diesel._"
 
@@ -63,3 +62,5 @@ scalacOptions ++= Seq(
 )
 
 wartremoverErrors in (Compile, compile) ++= Warts.unsafe
+
+dependsOn(macros)
