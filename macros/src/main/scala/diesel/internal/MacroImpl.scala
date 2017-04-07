@@ -19,8 +19,7 @@ object MacroImpl {
             // Extract common variables
             val abstractMembers = getAbstractMembers(template)
             if (abstractMembers.isEmpty) {
-              abort(
-                s"Did not find any abstract members with $tparam return type. Add some.")
+              abort(s"Did not find any abstract members with $tparam return type. Add some.")
             }
             val concreteMembers = getConcreteMembers(template)
             if (concreteMembers.nonEmpty) {
@@ -55,32 +54,28 @@ object MacroImpl {
 
     def ensureSoundMembers(): Unit = {
       for {
-        s <- template.stats
+        s  <- template.stats
         st <- s
       } {
         st match {
           case d @ Defn.Def(mods, _, _, _, _, _)
               if mods.exists(e =>
-                e == Mod.Private(Name.Anonymous()) || e == Mod.Protected(
-                  Name.Anonymous())) => {
+                e == Mod.Private(Name.Anonymous()) || e == Mod.Protected(Name.Anonymous())) => {
             abort(s"Please use only package private or protected: ${d.syntax}")
           }
           case v @ Defn.Val(mods, _, _, _)
               if mods.exists(e =>
-                e == Mod.Private(Name.Anonymous()) || e == Mod.Protected(
-                  Name.Anonymous())) => {
+                e == Mod.Private(Name.Anonymous()) || e == Mod.Protected(Name.Anonymous())) => {
             abort(s"Please use only package private or protected: ${v.syntax}")
           }
           case d @ Decl.Def(mods, _, _, _, _)
               if mods.exists(e =>
-                e == Mod.Private(Name.Anonymous()) || e == Mod.Protected(
-                  Name.Anonymous())) => {
+                e == Mod.Private(Name.Anonymous()) || e == Mod.Protected(Name.Anonymous())) => {
             abort(s"Please use only package private or protected: ${d.syntax}")
           }
           case v @ Decl.Val(mods, _, _)
               if mods.exists(e =>
-                e == Mod.Private(Name.Anonymous()) || e == Mod.Protected(
-                  Name.Anonymous())) => {
+                e == Mod.Private(Name.Anonymous()) || e == Mod.Protected(Name.Anonymous())) => {
             abort(s"Please use only package private or protected: ${v.syntax}")
           }
 
@@ -107,13 +102,12 @@ object MacroImpl {
             abort(
               s"Abstract def needs to have return type ${tparam.name}[...], otherwise, make it non-abstract: ${System
                 .lineSeparator()} ${d.syntax}")
-          case v @ Decl.Val(_, _, retType: Type.Name)
-              if retType.value != tparam.name.value =>
+          case v @ Decl.Val(_, _, retType: Type.Name) if retType.value != tparam.name.value =>
             abort(
               s"Abstract val needs to have return type ${tparam.name}[...], otherwise, make it non-abstract: ${System
                 .lineSeparator()} ${v.syntax}")
           case v: Defn.Var => abort(s"Found a var, which is not allowed: $v")
-          case _ => ()
+          case _           => ()
         }
       }
     }
@@ -189,16 +183,13 @@ object MacroImpl {
         Defn.Def(mods, name, tparams, newParamss, Some(newDeclTpe), body)
       }
 
-      def buildWrappedVal(mods: Seq[Mod],
-                          pats: Seq[Pat.Var.Term],
-                          declTargs: Seq[Type]) = {
+      def buildWrappedVal(mods: Seq[Mod], pats: Seq[Pat.Var.Term], declTargs: Seq[Type]) = {
         val patName = pats match {
           case Seq(p) => p
           case _ =>
-            abort(
-              s"""Pattern-matched values are not supported at the moment: $pats""")
+            abort(s"""Pattern-matched values are not supported at the moment: $pats""")
         }
-        val body = q"""new Dsl[$Algebra, ..$declTargs] {
+        val body       = q"""new Dsl[$Algebra, ..$declTargs] {
                def apply[F[_]](implicit I: $Algebra[F]): F[..$declTargs] = I.${patName.name}
               }"""
         val newDeclTpe = t"Dsl[$Algebra, ..$declTargs]"
@@ -206,11 +197,7 @@ object MacroImpl {
       }
 
       decl.map {
-        case Decl.Def(mods,
-                      name,
-                      tparams,
-                      paramss,
-                      Type.Apply(retName: Type.Select, declTargs))
+        case Decl.Def(mods, name, tparams, paramss, Type.Apply(retName: Type.Select, declTargs))
             if retName.name.value == tparamName =>
           buildWrappedDef(mods, name, paramss, tparams, declTargs)
         case Decl.Val(mods,
@@ -219,16 +206,10 @@ object MacroImpl {
             if retName.name.value == tparamName =>
           buildWrappedVal(mods, pats, declTargs)
 
-        case Decl.Def(mods,
-                      name,
-                      tparams,
-                      paramss,
-                      Type.Apply(retName: Type.Name, declTargs))
+        case Decl.Def(mods, name, tparams, paramss, Type.Apply(retName: Type.Name, declTargs))
             if retName.value == tparamName =>
           buildWrappedDef(mods, name, paramss, tparams, declTargs)
-        case v @ Decl.Val(mods,
-                          pats,
-                          Type.Apply(retName: Type.Name, declTargs))
+        case v @ Decl.Val(mods, pats, Type.Apply(retName: Type.Name, declTargs))
             if retName.value == tparamName =>
           buildWrappedVal(mods, pats, declTargs)
       }

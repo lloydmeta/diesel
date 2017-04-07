@@ -17,7 +17,7 @@ class MacroSpec extends FunSpec with Matchers {
 
   type Id[A] = A
   val interpreter = new Maths.Algebra[Id] {
-    def int(i: Int) = i
+    def int(i: Int)                 = i
     def add(l: Id[Int], r: Id[Int]) = l + r
   }
 
@@ -25,8 +25,7 @@ class MacroSpec extends FunSpec with Matchers {
 
     import Maths._
 
-    it(
-      "should expand a trait into an object holding Algebra and DSL wrapper methods") {
+    it("should expand a trait into an object holding Algebra and DSL wrapper methods") {
       int(3)(interpreter) shouldBe 3
       add(int(3), int(10))(interpreter) shouldBe 13
     }
