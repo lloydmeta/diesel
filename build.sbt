@@ -54,7 +54,8 @@ libraryDependencies ++= Seq(
 
 lazy val commonDependencies = Seq(
   "org.scalameta" %% "scalameta" % "1.6.0",
-  "org.scalatest" %% "scalatest" % "3.2.0-SNAP4" % Test
+  "org.scalatest" %% "scalatest" % "3.2.0-SNAP4" % Test,
+  "org.typelevel" %% "cats" % "0.9.0" % Test
 )
 
 lazy val metaMacroSettings: Seq[Def.Setting[_]] = Seq(
