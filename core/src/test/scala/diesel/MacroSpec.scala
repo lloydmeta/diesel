@@ -17,9 +17,9 @@ class MacroSpec extends FunSpec with Matchers {
     describe("Simple Maths DSL") {
 
       @diesel
-      trait Maths[F[_]] {
-        def int(i: Int): F[Int]
-        def add(l: F[Int], r: F[Int]): F[Int]
+      trait Maths[G[_]] {
+        def int(i: Int): G[Int]
+        def add(l: G[Int], r: G[Int]): G[Int]
       }
 
       val interpreter = new Maths.Algebra[Id] {

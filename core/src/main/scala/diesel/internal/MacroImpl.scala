@@ -50,7 +50,8 @@ object MacroImpl {
 
   private class TypedContext(tparam: Type.Param, template: Template) {
 
-    private val tparamName = tparam.name.value
+    private val tparamName   = tparam.name.value
+    private val tparamAsType = Type.fresh().copy(tparamName)
 
     def ensureSoundMembers(): Unit = {
       for {
@@ -178,7 +179,7 @@ object MacroImpl {
         val newDeclTpe = t"Dsl[$Algebra, ..$declTargs]"
         val body =
           q"""new Dsl[$Algebra, ..$declTargs] {
-               def apply[F[_]](implicit I: $Algebra[F]): F[..$declTargs] = I.$name(...$interpreterArgs)
+               def apply[$tparam](implicit I: $Algebra[$tparamAsType]): $tparamAsType[..$declTargs] = I.$name(...$interpreterArgs)
               }"""
         Defn.Def(mods, name, tparams, newParamss, Some(newDeclTpe), body)
       }
@@ -190,7 +191,7 @@ object MacroImpl {
             abort(s"""Pattern-matched values are not supported at the moment: $pats""")
         }
         val body       = q"""new Dsl[$Algebra, ..$declTargs] {
-               def apply[F[_]](implicit I: $Algebra[F]): F[..$declTargs] = I.${patName.name}
+               def apply[$tparam](implicit I: $Algebra[$tparamAsType]): $tparamAsType[..$declTargs] = I.${patName.name}
               }"""
         val newDeclTpe = t"Dsl[$Algebra, ..$declTargs]"
         Defn.Val(mods, pats, Some(newDeclTpe), body)

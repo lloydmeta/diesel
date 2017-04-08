@@ -12,9 +12,9 @@ lazy val root = Project(id = "diesel-root", base = file("."))
     publishArtifact := false,
     publishLocal := {}
   )
-  .aggregate(macros)
+  .aggregate(core)
 
-lazy val macros = project.settings(
+lazy val core = project.settings(
   name := "diesel-core",
   commonSettings,
   metaMacroSettings,
