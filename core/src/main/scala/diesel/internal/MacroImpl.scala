@@ -21,9 +21,21 @@ object MacroImpl {
             if (abstractMembers.isEmpty) {
               abort(s"Did not find any abstract members with $tparam return type. Add some.")
             }
-            val concreteMembers = getConcreteMembers(template)
-            if (concreteMembers.nonEmpty) {
-              abort("Concrete members are not supported at the moment")
+            val extras = template.stats.toSeq.flatten.filterNot(s => abstractMembers.contains(s))
+            if (extras.nonEmpty) {
+              val err = extras
+                .map { ex =>
+                  s"""
+                     |  * ${ex.syntax}
+                   """.stripMargin
+
+                }
+                .mkString("\n\n")
+              abort(
+                s"""The following members are not supported inside a trait annotated with @diesel.
+                   |
+                   |Currently, only abstract defs and vals are supported inside the body, but we found the following:
+                   |$err""".stripMargin)
             }
 
             val dslWrappers = generateDslWrappers(abstractMembers)
