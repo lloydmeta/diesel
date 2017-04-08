@@ -10,53 +10,72 @@ object MacroImpl {
 
   def expand(defn: Tree): Stat = {
     defn match {
+      // No companion object
       case q"..$mods trait $tname[..$tparams] extends $template" => {
-        tparams match {
-          case Seq(tparam) if tparam.tparams.size == 1 => {
-            val typedContext = new TypedContext(tparam, template)
-            import typedContext._
+        val (statements, dslWrappers) = buildStatements(tparams, template)
+        q"""..$mods object ${Term.Name(tname.value)} {
+             ..${statements.stats}
+             ..$dslWrappers
+           }
+          """
+      }
+      // There is a companion object
+      case Term.Block(
+          Seq(
+            q"..$mods trait $tname[..$tparams] extends $template",
+            companion: Defn.Object
+          )
+          ) => {
+        val (statements, dslWrappers) = buildStatements(tparams, template)
+        val templateStats: Seq[Stat] =
+          statements.stats ++ dslWrappers ++ companion.templ.stats.getOrElse(Nil)
+        val newTemplate = companion.templ.copy(stats = Some(templateStats))
+        Term.Block(Seq(companion.copy(templ = newTemplate)))
+      }
+      case _ => abort("Sorry, we only work on traits")
+    }
+  }
 
-            // Extract common variables
-            val abstractMembers = getAbstractMembers(template)
-            if (abstractMembers.isEmpty) {
-              abort(s"Did not find any abstract members with $tparam return type. Add some.")
-            }
-            val extras = template.stats.toSeq.flatten.filterNot(s => abstractMembers.contains(s))
-            if (extras.nonEmpty) {
-              val err = extras
-                .map { ex =>
-                  s"""
-                     |  * ${ex.syntax}
+  private def buildStatements(tparams: Seq[Type.Param], template: Template) = {
+    tparams match {
+      case Seq(tparam) if tparam.tparams.size == 1 => {
+        val typedContext = new TypedContext(tparam, template)
+        import typedContext._
+
+        // Extract common variables
+        val abstractMembers = getAbstractMembers(template)
+        if (abstractMembers.isEmpty) {
+          abort(s"Did not find any abstract members with $tparam return type. Add some.")
+        }
+        val extras = template.stats.toSeq.flatten.filterNot(s => abstractMembers.contains(s))
+        if (extras.nonEmpty) {
+          val err = extras
+            .map { ex =>
+              s"""
+                 |  * ${ex.syntax}
                    """.stripMargin
 
-                }
-                .mkString("\n\n")
-              abort(
-                s"""The following members are not supported inside a trait annotated with @diesel.
-                   |
-                   |Currently, only abstract defs and vals are supported inside the body, but we found the following:
-                   |$err""".stripMargin)
             }
+            .mkString("\n\n")
+          abort(s"""The following members are not supported inside a trait annotated with @diesel.
+               |
+                   |Currently, only abstract defs and vals are supported inside the body, but we found the following:
+               |$err""".stripMargin)
+        }
 
-            val dslWrappers = generateDslWrappers(abstractMembers)
-
-            q"""..$mods object ${Term.Name(tname.value)}{
+        val dslWrappers = generateDslWrappers(abstractMembers)
+        val statements  = q"""
                 import scala.language.higherKinds
                 import _root_.diesel.Dsl
 
                 trait $Algebra[$tparam] {
                   ..$abstractMembers
                 }
-
-                ..$dslWrappers
-               }
-             """
-          }
-          case _ =>
-            abort("Sorry, we only work with one type parameter with one hole")
-        }
+        """
+        (statements, dslWrappers)
       }
-      case _ => abort("Sorry, we only work on traits")
+      case _ =>
+        abort("Sorry, we only work with one type parameter with one hole")
     }
   }
 
