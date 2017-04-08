@@ -45,7 +45,8 @@ lazy val commonSettings: Seq[Def.Setting[_]] = Seq(
     "-Ywarn-numeric-widen",
     "-Ywarn-value-discard",
     "-Xfuture"
-  )
+  ),
+  wartremoverErrors in (Compile, compile) ++= Warts.unsafe
 )
 
 libraryDependencies ++= Seq(
@@ -95,8 +96,6 @@ scalacOptions ++= Seq(
   "-Xfuture",
   "-Ywarn-unused-import"
 )
-
-wartremoverErrors in (Compile, compile) ++= Warts.unsafe
 
 // Settings for publishing to Maven Central
 lazy val publishSettings: Seq[Def.Setting[_]] = Seq(

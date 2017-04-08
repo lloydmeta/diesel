@@ -158,7 +158,7 @@ object MacroImpl {
         .getOrElse(Nil)
     }
 
-    def generateDslWrappers(decl: List[Decl]) = {
+    def generateDslWrappers(decl: List[Decl]): List[Defn] = {
       def buildWrappedDef(mods: Seq[Mod],
                           name: Term.Name,
                           paramss: Seq[Seq[Term.Param]],
