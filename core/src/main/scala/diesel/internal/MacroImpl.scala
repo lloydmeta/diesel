@@ -7,6 +7,8 @@ import scala.meta.Type.Param
 object MacroImpl {
 
   private val Algebra = t"Algebra"
+  private val DslType = t"_root_.diesel.Dsl"
+  private val DslCtor = ctor"_root_.diesel.Dsl"
 
   def expand(defn: Tree): Stat = {
     defn match {
@@ -57,16 +59,20 @@ object MacroImpl {
 
             }
             .mkString("\n\n")
-          abort(s"""The following members are not supported inside a trait annotated with @diesel.
-               |
-                   |Currently, only abstract defs and vals are supported inside the body, but we found the following:
+          abort(s"""
+
+               |Currently, only abstract defs and vals are supported inside the body of a trait annotated with @diesel.
+                    |
+                    |If you wish to write concrete members, please add them to a companion object (the trait will be expanded into
+                    |the object).
+                    |
+                    |The following non-abstract members were found in the trait:
                |$err""".stripMargin)
         }
 
         val dslWrappers = generateDslWrappers(abstractMembers)
         val statements  = q"""
                 import scala.language.higherKinds
-                import _root_.diesel.Dsl
 
                 trait $Algebra[$tparam] {
                   ..$abstractMembers
@@ -187,7 +193,7 @@ object MacroImpl {
           params.map { param =>
             param.decltpe match {
               case Some(t"$tParamAsType[..$realParam]") => {
-                val decltpe = Some(t"Dsl[$Algebra, ..$realParam]")
+                val decltpe = Some(t"$DslType[$Algebra, ..$realParam]")
                 param.copy(decltpe = decltpe)
               }
               case _ => param
@@ -207,9 +213,9 @@ object MacroImpl {
             }
           }
         }
-        val newDeclTpe = t"Dsl[$Algebra, ..$declTargs]"
+        val newDeclTpe = t"$DslType[$Algebra, ..$declTargs]"
         val body =
-          q"""new Dsl[$Algebra, ..$declTargs] {
+          q"""new $DslCtor[$Algebra, ..$declTargs] {
                def apply[$tparam](implicit I: $Algebra[$tparamAsType]): $tparamAsType[..$declTargs] = I.$name(...$interpreterArgs)
               }"""
         Defn.Def(mods, name, tparams, newParamss, Some(newDeclTpe), body)
@@ -221,10 +227,10 @@ object MacroImpl {
           case _ =>
             abort(s"""Pattern-matched values are not supported at the moment: $pats""")
         }
-        val body       = q"""new Dsl[$Algebra, ..$declTargs] {
+        val body       = q"""new $DslCtor[$Algebra, ..$declTargs] {
                def apply[$tparam](implicit I: $Algebra[$tparamAsType]): $tparamAsType[..$declTargs] = I.${patName.name}
               }"""
-        val newDeclTpe = t"Dsl[$Algebra, ..$declTargs]"
+        val newDeclTpe = t"$DslType[$Algebra, ..$declTargs]"
         Defn.Val(mods, pats, Some(newDeclTpe), body)
       }
 

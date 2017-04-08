@@ -3,7 +3,9 @@ package diesel
 import scala.language.higherKinds
 
 /**
-  * A description of an operation that will be performed when given an interpreter
+  * A description of an operation that will be performed when given an interpreter.
+  *
+  * Note that nothing happens until the apply method is called with an interpreter.
   *
   * @tparam Alg An interpreter
   * @tparam A The value type wrapped by F[_]

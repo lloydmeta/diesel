@@ -1,7 +1,9 @@
-lazy val theVersion = "0.1.0-SNAPSHOT"
+lazy val theVersion = "0.1.1-SNAPSHOT"
 
 // scala.meta macros are at the moment only supported in 2.11.
 lazy val theScalaVersion = "2.11.8"
+
+scalaVersion in ThisBuild := theScalaVersion
 
 lazy val root = Project(id = "diesel-root", base = file("."))
   .settings(
@@ -46,7 +48,8 @@ lazy val commonSettings: Seq[Def.Setting[_]] = Seq(
     "-Ywarn-value-discard",
     "-Xfuture"
   ),
-  wartremoverErrors in (Compile, compile) ++= Warts.unsafe
+  wartremoverErrors in (Compile, compile) ++= Warts.unsafe,
+  doctestWithDependencies := false
 )
 
 libraryDependencies ++= Seq(
@@ -75,8 +78,6 @@ lazy val metaMacroSettings: Seq[Def.Setting[_]] = Seq(
   // temporary workaround for https://github.com/scalameta/paradise/issues/55
   sources in (Compile, doc) := Nil // macroparadise doesn't work with scaladoc yet.
 )
-
-initialCommands := "import diesel.diesel._"
 
 scalacOptions ++= Seq(
   "-deprecation",

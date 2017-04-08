@@ -1,4 +1,4 @@
-# Diesel [![Build Status](https://travis-ci.org/lloydmeta/diesel.svg?branch=master)](https://travis-ci.org/lloydmeta/diesel)
+# Diesel [![Build Status](https://travis-ci.org/lloydmeta/diesel.svg?branch=master)](https://travis-ci.org/lloydmeta/diesel) [![Maven Central](https://maven-badges.herokuapp.com/maven-central/com.beachape/diesel-core_2.11/badge.svg)](https://maven-badges.herokuapp.com/maven-central/com.beachape/diesel-core_2.11)
 
 Boilerplate free Finally Tagless DSL macro annotation, written in [scala.meta](http://scalameta.org/) for future compatibility and other nice things (like free IDE support).
 
@@ -68,10 +68,10 @@ object Maths {
 
 ## Sbt
 
-Currently published as a SNAPSHOT on Sonatype
+[![Maven Central](https://maven-badges.herokuapp.com/maven-central/com.beachape/diesel-core_2.11/badge.svg)](https://maven-badges.herokuapp.com/maven-central/com.beachape/diesel-core_2.11)
 
 ```scala
-libraryDependencies += "com.beachape" %% "diesel-core" % "0.1.0-SNAPSHOT"
+libraryDependencies += "com.beachape" %% "diesel-core" % s"$latest_version"
 
 
 // Additional ceremony for using Scalameta macro annotations
