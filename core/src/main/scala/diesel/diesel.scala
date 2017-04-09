@@ -6,6 +6,9 @@ import scala.meta._
   * Annotation used for expanding a trait parameterised with a type that takes
   * one type application into a DSL.
   *
+  * By default, the algebra generated will have the name "Algebra", but this annotation
+  * takes a String argument that you can use to customise it.
+  *
   * If you wish to put concrete methods into the resulting companion object, write them
   * in a separate concrete object. The Tagless-Final expansions will be prepended to the
   * body of the companion object that you write. If you don't write a companion object,
@@ -43,12 +46,17 @@ import scala.meta._
   * res1: Int = 13
   * }}}
   */
-class diesel extends scala.annotation.StaticAnnotation {
+@SuppressWarnings(Array("org.wartremover.warts.DefaultArguments"))
+class diesel(algebra: String = diesel.DefaultAlgebraName) extends scala.annotation.StaticAnnotation {
 
   inline def apply(defn: Any): Any = meta {
-    val r = diesel.internal.MacroImpl.expand(defn)
+    val r = internal.MacroImpl.expand(this, defn)
 //    println(r.syntax)
     r
   }
 
+}
+
+object diesel {
+  val DefaultAlgebraName: String = "Algebra"
 }

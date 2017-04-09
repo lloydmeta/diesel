@@ -6,15 +6,21 @@ import scala.meta.Type.Param
 
 object MacroImpl {
 
-  private val Algebra = t"Algebra"
   private val DslType = t"_root_.diesel.Dsl"
   private val DslCtor = ctor"_root_.diesel.Dsl"
 
-  def expand(defn: Tree): Stat = {
+  def expand(self: Tree, defn: Tree): Stat = {
+    val algebraType: Type.Name = {
+      val arg = self match {
+        case q"new $_(${Lit(arg: String)})" => arg
+        case _                              => _root_.diesel.diesel.DefaultAlgebraName
+      }
+      Type.Name(arg)
+    }
     defn match {
       // No companion object
       case q"..$mods trait $tname[..$tparams] extends $template" => {
-        val (statements, dslWrappers) = buildStatements(tparams, template)
+        val TaglessFinalTrees(statements, dslWrappers) = buildTrees(algebraType, tparams, template)
         q"""..$mods object ${Term.Name(tname.value)} {
              ..${statements.stats}
              ..$dslWrappers
@@ -28,7 +34,7 @@ object MacroImpl {
             companion: Defn.Object
           )
           ) => {
-        val (statements, dslWrappers) = buildStatements(tparams, template)
+        val TaglessFinalTrees(statements, dslWrappers) = buildTrees(algebraType, tparams, template)
         val templateStats: Seq[Stat] =
           statements.stats ++ dslWrappers ++ companion.templ.stats.getOrElse(Nil)
         val newTemplate = companion.templ.copy(stats = Some(templateStats))
@@ -38,152 +44,162 @@ object MacroImpl {
     }
   }
 
-  private def buildStatements(tparams: Seq[Type.Param], template: Template) = {
+  private def buildTrees(algebraType: Type.Name,
+                         tparams: Seq[Type.Param],
+                         template: Template): TaglessFinalTrees = {
     tparams match {
       case Seq(tparam) if tparam.tparams.size == 1 => {
-        val typedContext = new TypedContext(tparam, template)
-        import typedContext._
-
-        // Extract common variables
-        val abstractMembers = getAbstractMembers(template)
-        if (abstractMembers.isEmpty) {
-          abort(s"Did not find any abstract members with $tparam return type. Add some.")
-        }
-        val extras = template.stats.toSeq.flatten.filterNot(s => abstractMembers.contains(s))
-        if (extras.nonEmpty) {
-          val err = extras
-            .map { ex =>
-              s"""
-                 |  * ${ex.syntax}
-                   """.stripMargin
-
-            }
-            .mkString("\n\n")
-          abort(s"""
-
-               |Currently, only abstract defs and vals are supported inside the body of a trait annotated with @diesel.
-                    |
-                    |If you wish to write concrete members, please add them to a companion object (the trait will be expanded into
-                    |the object).
-                    |
-                    |The following non-abstract members were found in the trait:
-               |$err""".stripMargin)
-        }
-
-        val dslWrappers = generateDslWrappers(abstractMembers)
-        val statements  = q"""
-                import scala.language.higherKinds
-
-                trait $Algebra[$tparam] {
-                  ..$abstractMembers
-                }
-        """
-        (statements, dslWrappers)
+        val typedContext = new TaglessFinalBuilder(algebraType, tparam, template)
+        typedContext.build()
       }
       case _ =>
         abort("Sorry, we only work with one type parameter with one hole")
     }
   }
 
-  private class TypedContext(tparam: Type.Param, template: Template) {
+  private class TaglessFinalBuilder(algebraType: Type.Name, tparam: Type.Param, template: Template) {
 
-    private val tparamName   = tparam.name.value
-    private val tparamAsType = Type.fresh().copy(tparamName)
+    private val tparamName         = tparam.name.value
+    private val tparamAsType       = Type.fresh().copy(tparamName)
+    private val templateStatements = template.stats.toSeq.flatten
 
-    def ensureSoundMembers(): Unit = {
-      for {
-        s  <- template.stats
-        st <- s
-      } {
-        st match {
-          case d @ Defn.Def(mods, _, _, _, _, _)
-              if mods.exists(e =>
-                e == Mod.Private(Name.Anonymous()) || e == Mod.Protected(Name.Anonymous())) => {
-            abort(s"Please use only package private or protected: ${d.syntax}")
-          }
-          case v @ Defn.Val(mods, _, _, _)
-              if mods.exists(e =>
-                e == Mod.Private(Name.Anonymous()) || e == Mod.Protected(Name.Anonymous())) => {
-            abort(s"Please use only package private or protected: ${v.syntax}")
-          }
-          case d @ Decl.Def(mods, _, _, _, _)
-              if mods.exists(e =>
-                e == Mod.Private(Name.Anonymous()) || e == Mod.Protected(Name.Anonymous())) => {
-            abort(s"Please use only package private or protected: ${d.syntax}")
-          }
-          case v @ Decl.Val(mods, _, _)
-              if mods.exists(e =>
-                e == Mod.Private(Name.Anonymous()) || e == Mod.Protected(Name.Anonymous())) => {
-            abort(s"Please use only package private or protected: ${v.syntax}")
-          }
+    def build(): TaglessFinalTrees = {
+      // Extract common variables
+      val abstracts = abstractMembers
 
-          case v @ Defn.Def(_, _, _, _, None, _) =>
-            abort(s"Return type must be explicitly stated for $v")
-          case v @ Defn.Val(_, _, None, _) =>
-            abort(s"Return type must be explicitly stated for $v")
+      ensureSoundMembers(abstracts)
 
-          // <-- For IntelliJ
-          case d @ Decl.Def(_, _, _, _, retType: Type.Select)
-              if retType.name.value != tparam.name.value =>
-            abort(
-              s"Abstract def needs to have return type ${tparam.name}[...], otherwise, make it non-abstract: ${System
-                .lineSeparator()} ${d.syntax}")
-          case v @ Decl.Val(_, _, retType: Type.Select)
-              if retType.name.value != tparam.name.value =>
-            abort(
-              s"Abstract val needs to have return type ${tparam.name}[...], otherwise, make it non-abstract: ${System
-                .lineSeparator()} ${v.syntax}")
-          // For IntelliJ -->
+      val dslWrappers = generateDslWrappers(abstracts)
+      val statements  = q"""
+                import scala.language.higherKinds
 
-          case d @ Decl.Def(_, _, _, _, retType: Type.Name)
-              if retType.value != tparam.name.value =>
-            abort(
-              s"Abstract def needs to have return type ${tparam.name}[...], otherwise, make it non-abstract: ${System
-                .lineSeparator()} ${d.syntax}")
-          case v @ Decl.Val(_, _, retType: Type.Name) if retType.value != tparam.name.value =>
-            abort(
-              s"Abstract val needs to have return type ${tparam.name}[...], otherwise, make it non-abstract: ${System
-                .lineSeparator()} ${v.syntax}")
-          case v: Defn.Var => abort(s"Found a var, which is not allowed: $v")
-          case _           => ()
-        }
+                trait $algebraType[$tparam] {
+                  ..$abstracts
+                }
+        """
+      TaglessFinalTrees(statements, dslWrappers)
+    }
+
+    private def ensureSoundMembers(abstractMembers: List[Decl]): Unit = {
+      val privs       = privateMembers
+      val lackReturns = noReturnType
+      val wrongKinds  = nonMatchingKind
+      val muts        = vars
+      val extras      = concreteMembers
+
+      def buildErr(intro: String, stats: List[Stat]): Option[String] = {
+        if (stats.nonEmpty) {
+          val errs = stats
+            .map { stat =>
+              s"  * ${stat.syntax}"
+            }
+            .mkString("\n\n")
+          Some(s"""$intro:
+               |
+               |$errs""".stripMargin)
+        } else None
+      }
+
+      val privsErrMsg    = buildErr("Please use only package private or protected", privs)
+      val lackReturnsMsg = buildErr("Return type must be explicitly stated", lackReturns)
+      val wrongKindsMsg  = buildErr("Return type must be explicitly stated", wrongKinds)
+      val mutsMsg        = buildErr("Found one or more vars, which are not allowed", muts)
+      val extrasMsg = buildErr(
+        """Currently, only abstract defs and vals are supported inside the body of a trait annotated with @diesel.
+          |If you wish to write concrete members, please add them to a companion object (the trait will be expanded into
+          |the object)""".stripMargin,
+        extras
+      )
+
+      val combinedErrs: Seq[String] =
+        Seq(privsErrMsg, lackReturnsMsg, wrongKindsMsg, mutsMsg, extrasMsg).flatten
+      if (combinedErrs.nonEmpty) {
+        val errsMsg = combinedErrs.mkString("\n\n")
+
+        abort(s"""
+             |
+             |Looks like you're using some unsupported syntax in a trait annotated with @diesel.
+             |
+             |$errsMsg
+           """.stripMargin)
       }
     }
 
-    def getConcreteMembers(template: Template): List[Defn] = {
-      template.stats
-        .map { stats =>
-          stats.collect {
-            case d: Defn.Def => d
-            case v: Defn.Val => v
-          }.toList
+    private def privateMembers =
+      templateStatements.collect {
+        case d @ Defn.Def(mods, _, _, _, _, _)
+            if mods.exists(
+              e => e == Mod.Private(Name.Anonymous()) || e == Mod.Protected(Name.Anonymous())) => {
+          d
         }
-        .getOrElse(Nil)
-    }
-
-    def getAbstractMembers(template: Template): List[Decl] = {
-      template.stats
-        .map { stats =>
-          stats.collect {
-            case m @ Decl.Def(_, _, _, _, Type.Apply(retName: Type.Select, _))
-                if retName.name.value == tparamName =>
-              m
-            case v @ Decl.Val(_, _, Type.Apply(retName: Type.Select, _))
-                if retName.name.value == tparamName =>
-              v
-
-            case m @ Decl.Def(_, _, _, _, Type.Apply(retName: Type.Name, _))
-                if retName.value == tparamName =>
-              m
-            case v @ Decl.Val(_, _, Type.Apply(retName: Type.Name, _))
-                if retName.value == tparamName =>
-              v
-          }.toList
+        case v @ Defn.Val(mods, _, _, _)
+            if mods.exists(
+              e => e == Mod.Private(Name.Anonymous()) || e == Mod.Protected(Name.Anonymous())) => {
+          v
         }
-        .getOrElse(Nil)
-    }
+        case d @ Decl.Def(mods, _, _, _, _)
+            if mods.exists(
+              e => e == Mod.Private(Name.Anonymous()) || e == Mod.Protected(Name.Anonymous())) => {
+          d
+        }
+        case v @ Decl.Val(mods, _, _)
+            if mods.exists(
+              e => e == Mod.Private(Name.Anonymous()) || e == Mod.Protected(Name.Anonymous())) => {
+          v
+        }
+      }.toList
 
-    def generateDslWrappers(decl: List[Decl]): List[Defn] = {
+    private def noReturnType =
+      templateStatements.collect {
+        case d @ Defn.Def(_, _, _, _, None, _) =>
+          d
+        case v @ Defn.Val(_, _, None, _) =>
+          v
+      }.toList
+
+    private def nonMatchingKind =
+      templateStatements.collect {
+        // <-- For IntelliJ
+        case d @ Decl.Def(_, _, _, _, retType: Type.Select)
+            if retType.name.value != tparam.name.value =>
+          d
+        case v @ Decl.Val(_, _, retType: Type.Select) if retType.name.value != tparam.name.value =>
+          v
+        // For IntelliJ -->
+        case d @ Decl.Def(_, _, _, _, retType: Type.Name) if retType.value != tparam.name.value =>
+          d
+        case v @ Decl.Val(_, _, retType: Type.Name) if retType.value != tparam.name.value => v
+      }.toList
+
+    private def vars =
+      templateStatements.collect {
+        case v: Defn.Var => v
+      }.toList
+
+    private def concreteMembers =
+      templateStatements.collect {
+        case d: Defn.Def => d
+        case v: Defn.Val => v
+      }.toList
+
+    private def abstractMembers: List[Decl] =
+      templateStatements.collect {
+        case m @ Decl.Def(_, _, _, _, Type.Apply(retName: Type.Select, _))
+            if retName.name.value == tparamName =>
+          m
+        case v @ Decl.Val(_, _, Type.Apply(retName: Type.Select, _))
+            if retName.name.value == tparamName =>
+          v
+
+        case m @ Decl.Def(_, _, _, _, Type.Apply(retName: Type.Name, _))
+            if retName.value == tparamName =>
+          m
+        case v @ Decl.Val(_, _, Type.Apply(retName: Type.Name, _))
+            if retName.value == tparamName =>
+          v
+      }.toList
+
+    private def generateDslWrappers(decl: List[Decl]): List[Defn] = {
       def buildWrappedDef(mods: Seq[Mod],
                           name: Term.Name,
                           paramss: Seq[Seq[Term.Param]],
@@ -193,7 +209,7 @@ object MacroImpl {
           params.map { param =>
             param.decltpe match {
               case Some(t"$tParamAsType[..$realParam]") => {
-                val decltpe = Some(t"$DslType[$Algebra, ..$realParam]")
+                val decltpe = Some(t"$DslType[$algebraType, ..$realParam]")
                 param.copy(decltpe = decltpe)
               }
               case _ => param
@@ -213,10 +229,10 @@ object MacroImpl {
             }
           }
         }
-        val newDeclTpe = t"$DslType[$Algebra, ..$declTargs]"
+        val newDeclTpe = t"$DslType[$algebraType, ..$declTargs]"
         val body =
-          q"""new $DslCtor[$Algebra, ..$declTargs] {
-               def apply[$tparam](implicit I: $Algebra[$tparamAsType]): $tparamAsType[..$declTargs] = I.$name(...$interpreterArgs)
+          q"""new $DslCtor[$algebraType, ..$declTargs] {
+               def apply[$tparam](implicit I: $algebraType[$tparamAsType]): $tparamAsType[..$declTargs] = I.$name(...$interpreterArgs)
               }"""
         Defn.Def(mods, name, tparams, newParamss, Some(newDeclTpe), body)
       }
@@ -227,10 +243,10 @@ object MacroImpl {
           case _ =>
             abort(s"""Pattern-matched values are not supported at the moment: $pats""")
         }
-        val body       = q"""new $DslCtor[$Algebra, ..$declTargs] {
-               def apply[$tparam](implicit I: $Algebra[$tparamAsType]): $tparamAsType[..$declTargs] = I.${patName.name}
+        val body       = q"""new $DslCtor[$algebraType, ..$declTargs] {
+               def apply[$tparam](implicit I: $algebraType[$tparamAsType]): $tparamAsType[..$declTargs] = I.${patName.name}
               }"""
-        val newDeclTpe = t"$DslType[$Algebra, ..$declTargs]"
+        val newDeclTpe = t"$DslType[$algebraType, ..$declTargs]"
         Defn.Val(mods, pats, Some(newDeclTpe), body)
       }
 
@@ -254,5 +270,7 @@ object MacroImpl {
     }
 
   }
+
+  private case class TaglessFinalTrees(modules: Term.Block, wrapperMethods: List[Defn])
 
 }

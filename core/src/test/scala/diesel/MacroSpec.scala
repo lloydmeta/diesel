@@ -96,6 +96,34 @@ class MacroSpec extends FunSpec with Matchers {
       }
     }
 
+    describe("when the annotation is passed an Algebra name") {
+      describe("Simple Maths DSL") {
+
+        @diesel("Alg")
+        trait Maths[G[_]] {
+          def int(i: Int): G[Int]
+          def add(l: G[Int], r: G[Int]): G[Int]
+        }
+
+        object Maths {
+          val answer: Int = 42
+
+          val interpreter = new Alg[Id] {
+            def int(i: Int)                 = i
+            def add(l: Id[Int], r: Id[Int]) = l + r
+          }
+        }
+
+        import Maths._
+
+        it("should expand a trait into an object holding Algebra and DSL wrapper methods") {
+          int(3)(interpreter) shouldBe 3
+          add(int(3), int(10))(interpreter) shouldBe 13
+        }
+
+      }
+    }
+
   }
 
 }
