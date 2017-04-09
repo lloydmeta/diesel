@@ -81,67 +81,60 @@ object MacroImpl {
     }
 
     private def ensureSoundMembers(abstractMembers: List[Decl]): Unit = {
-      def buildErr(intro: String, stats: List[Stat]): Option[String] = {
-        if (stats.nonEmpty) {
-          val errs = stats
+      val absMembersSet: Set[Stat] = abstractMembers.toSet
+      // The spaces in multiline strings are significant
+      val statsWithErrors = findErrors(
+        Seq(
+          ("Please use only package private or protected modifiers.", privateMembersPf),
+          ("Return types must be explicitly stated.", noReturnTypePf),
+          (s"""The return type of this method is not wrapped in $tparamName[_]. Methods like this can be
+             |      added to the trait's companion object.""".stripMargin,
+           nonMatchingKindPf(absMembersSet)),
+          ("Vars are not allowed.", varsPf),
+          ("""Currently, only abstract defs and vals are supported inside the body of a trait annotated with @diesel.
+             |      If you wish to write concrete members, please add them to a companion object (the trait will
+             |      be expanded into the object).""".stripMargin,
+           concreteMembersPf),
+          (s"""This following method has a type parameter that shadows the $tparamName[_] used to annotate the trait.
+             |      Besides being confusing for readers of your code, this is not currently supported by diesel.""".stripMargin,
+           methodsShadowingTParamPF)
+        )
+      )
+
+      val specificErrors = statsWithErrors.map {
+        case (stat, errors) =>
+          val combinedErrors = errors
+            .map { e =>
+              s"    * $e"
+            }
+            .mkString("\n")
+          s"""  ${stat.syntax}
+           |
+           |$combinedErrors
+         """.stripMargin
+      }
+
+      val erroneousStats = statsWithErrors.map(_._1).toSet
+      val genUnsupportedStats = templateStatements.filterNot { s =>
+        erroneousStats.contains(s) || absMembersSet.contains(s)
+      }
+      val genUnsupportedErrs = {
+        if (genUnsupportedStats.nonEmpty) {
+          val statsStrs = genUnsupportedStats
             .map { stat =>
               s"  * ${stat.syntax}"
             }
             .mkString("\n\n")
-          Some(s"""$intro:
-               |
-               |$errs""".stripMargin)
-        } else None
+          Seq(
+            s"""The following are not supported inside the body of a trait annotated with @diesel. Please consider
+             |moving them into a companion object:
+             |
+             |$statsStrs""".stripMargin)
+        } else Nil
       }
-
-      val privs        = privateMembers
-      val noRets       = noReturnType
-      val wrongKinds   = nonMatchingKind
-      val muts         = vars
-      val concretes    = concreteMembers
-      val shadowed     = methodsShadowingTparam
-      val allErroneous = (privs ++ noRets ++ wrongKinds ++ muts ++ concretes ++ shadowed).toSet
-      val genUnsupported = templateStatements.filterNot { s =>
-        allErroneous.contains(s) || abstractMembers.contains(s)
-      }.toList
-
-      val privsErrMsg    = buildErr("Please use only package private or protected", privs)
-      val lackReturnsMsg = buildErr("Return types must be explicitly stated", noRets)
-      val wrongKindsMsg = buildErr(
-        s"""The following methods do not return something wrapped in $tparamName[_]. Methods like this can be
-           |added to the trait's companion object
-         """.stripMargin,
-        wrongKinds
-      )
-      val mutsMsg = buildErr("Found one or more vars, which are not allowed", muts)
-      val concreteMembersMsg = buildErr(
-        """Currently, only abstract defs and vals are supported inside the body of a trait annotated with @diesel.
-          |If you wish to write concrete members, please add them to a companion object (the trait will
-          |be expanded into the object)""".stripMargin,
-        concretes
-      )
-      val overshadowingTypeParam = buildErr(
-        s"""The following methods have type parameters that shadow $tparamName[_] used to annotate the trait.
-           |Besides being confusing for readers of your code, this is not currently supported by diesel
-         """.stripMargin,
-        shadowed
-      )
-      val generallyUnsupported = buildErr(
-        s"""The following are not supported inside the body of a trait annotated with @diesel. Please consider
-           |moving them into a companion object""".stripMargin,
-        genUnsupported
-      )
-
-      val combinedErrs: Seq[String] =
-        Seq(generallyUnsupported,
-            privsErrMsg,
-            lackReturnsMsg,
-            wrongKindsMsg,
-            mutsMsg,
-            concreteMembersMsg,
-            overshadowingTypeParam).flatten
-      if (combinedErrs.nonEmpty) {
-        val errsMsg = combinedErrs.mkString("\n\n")
+      val combinedErrMsgs = specificErrors ++ genUnsupportedErrs
+      if (combinedErrMsgs.nonEmpty) {
+        val errsMsg = combinedErrMsgs.mkString("\n\n")
 
         abort(s"""
              |
@@ -152,6 +145,7 @@ object MacroImpl {
       }
     }
 
+    type StatPF = PartialFunction[Stat, Stat]
     private def isPrivateOrProtected(m: Mod): Boolean = {
       // This is the only reliable way to compare mods...
       m match {
@@ -160,61 +154,42 @@ object MacroImpl {
       }
     }
 
-    private def privateMembers =
-      templateStatements.collect {
-        case d @ Defn.Def(mods, _, _, _, _, _) if mods.exists(isPrivateOrProtected) =>
-          d
-        case v @ Defn.Val(mods, _, _, _) if mods.exists(isPrivateOrProtected) =>
-          v
-        case d @ Decl.Def(mods, _, _, _, _) if mods.exists(isPrivateOrProtected) =>
-          d
-        case v @ Decl.Val(mods, _, _) if mods.exists(isPrivateOrProtected) =>
-          v
-      }.toList
+    private val privateMembersPf: StatPF = {
+      case d @ Defn.Def(mods, _, _, _, _, _) if mods.exists(isPrivateOrProtected) =>
+        d
+      case v @ Defn.Val(mods, _, _, _) if mods.exists(isPrivateOrProtected) =>
+        v
+      case d @ Decl.Def(mods, _, _, _, _) if mods.exists(isPrivateOrProtected) =>
+        d
+      case v @ Decl.Val(mods, _, _) if mods.exists(isPrivateOrProtected) =>
+        v
+    }
+    private val noReturnTypePf: StatPF = {
+      case d @ Defn.Def(_, _, _, _, None, _) =>
+        d
+      case v @ Defn.Val(_, _, None, _) =>
+        v
+    }
 
-    private def noReturnType =
-      templateStatements.collect {
-        case d @ Defn.Def(_, _, _, _, None, _) =>
-          d
-        case v @ Defn.Val(_, _, None, _) =>
-          v
-      }.toList
+    private def nonMatchingKindPf(absMems: Set[Stat]): StatPF = {
+      case d: Decl.Def if !absMems.contains(d) => d
+      case v: Decl.Val if !absMems.contains(v) => v
+    }
 
-    private def nonMatchingKind =
-      templateStatements.collect {
-        // <-- For IntelliJ
-        case d @ Decl.Def(_, _, _, _, Type.Apply(retType: Type.Select, _))
-            if retType.name.value != tparam.name.value =>
-          d
-        case v @ Decl.Def(_, _, _, _, Type.Apply(retType: Type.Select, _))
-            if retType.name.value != tparam.name.value =>
-          v
-        // For IntelliJ -->
-        case d @ Decl.Def(_, _, _, _, Type.Apply(retType: Type.Name, _))
-            if retType.value != tparam.name.value =>
-          d
-        case v @ Decl.Def(_, _, _, _, Type.Apply(retType: Type.Name, _))
-            if retType.value != tparam.name.value =>
-          v
-      }.toList
+    private val varsPf: StatPF = {
+      case v: Defn.Var => v
+    }
 
-    private def vars =
-      templateStatements.collect {
-        case v: Defn.Var => v
-      }.toList
+    private val concreteMembersPf: StatPF = {
+      case d: Defn.Def => d
+      case v: Defn.Val => v
+    }
 
-    private def concreteMembers =
-      templateStatements.collect {
-        case d: Defn.Def => d
-        case v: Defn.Val => v
-      }.toList
-
-    private def methodsShadowingTparam =
-      templateStatements.collect {
-        case d @ Decl.Def(_, _, tparams, _, _)
-            if tparams.exists(tp => tp.name.value == tparamName) =>
-          d
-      }.toList
+    private val methodsShadowingTParamPF: StatPF = {
+      case d @ Decl.Def(_, _, tparams, _, _)
+          if tparams.exists(tp => tp.name.value == tparamName) =>
+        d
+    }
 
     private def abstractMembers: List[Decl] =
       templateStatements.collect {
@@ -232,6 +207,21 @@ object MacroImpl {
             if retName.value == tparamName =>
           v
       }.toList
+
+    private def findErrors(
+        msgsToPfs: Seq[(String, PartialFunction[Stat, Stat])]): Seq[(Stat, Seq[String])] = {
+      templateStatements.foldLeft(Seq.empty[(Stat, Seq[String])]) {
+        case (acc, stat) =>
+          val errs = msgsToPfs.foldLeft(Seq.empty[String]) {
+            case (innerAcc, (str, pf)) =>
+              if (pf.isDefinedAt(stat))
+                innerAcc :+ str
+              else
+                innerAcc
+          }
+          if (errs.nonEmpty) acc :+ (stat -> errs) else acc
+      }
+    }
 
     private def generateDslWrappers(decl: List[Decl]): List[Defn] = {
       def buildWrappedDef(mods: Seq[Mod],
