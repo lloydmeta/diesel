@@ -1,4 +1,4 @@
-lazy val theVersion = "0.1.4-SNAPSHOT"
+lazy val theVersion = "0.1.4"
 
 // scala.meta macros are at the moment only supported in 2.11.
 lazy val theScalaVersion = "2.11.8"
