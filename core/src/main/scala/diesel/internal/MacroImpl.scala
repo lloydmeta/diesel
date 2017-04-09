@@ -81,12 +81,6 @@ object MacroImpl {
     }
 
     private def ensureSoundMembers(abstractMembers: List[Decl]): Unit = {
-      val privs       = privateMembers
-      val lackReturns = noReturnType
-      val wrongKinds  = nonMatchingKind
-      val muts        = vars
-      val extras      = concreteMembers
-
       def buildErr(intro: String, stats: List[Stat]): Option[String] = {
         if (stats.nonEmpty) {
           val errs = stats
@@ -100,19 +94,19 @@ object MacroImpl {
         } else None
       }
 
-      val privsErrMsg    = buildErr("Please use only package private or protected", privs)
-      val lackReturnsMsg = buildErr("Return type must be explicitly stated", lackReturns)
-      val wrongKindsMsg  = buildErr("Return type must be explicitly stated", wrongKinds)
-      val mutsMsg        = buildErr("Found one or more vars, which are not allowed", muts)
-      val extrasMsg = buildErr(
+      val privsErrMsg    = buildErr("Please use only package private or protected", privateMembers)
+      val lackReturnsMsg = buildErr("Return type must be explicitly stated", noReturnType)
+      val wrongKindsMsg  = buildErr("Return type must be explicitly stated", nonMatchingKind)
+      val mutsMsg        = buildErr("Found one or more vars, which are not allowed", vars)
+      val concreteMembersMsg = buildErr(
         """Currently, only abstract defs and vals are supported inside the body of a trait annotated with @diesel.
           |If you wish to write concrete members, please add them to a companion object (the trait will be expanded into
           |the object)""".stripMargin,
-        extras
+        concreteMembers
       )
 
       val combinedErrs: Seq[String] =
-        Seq(privsErrMsg, lackReturnsMsg, wrongKindsMsg, mutsMsg, extrasMsg).flatten
+        Seq(privsErrMsg, lackReturnsMsg, wrongKindsMsg, mutsMsg, concreteMembersMsg).flatten
       if (combinedErrs.nonEmpty) {
         val errsMsg = combinedErrs.mkString("\n\n")
 
