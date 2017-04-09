@@ -202,8 +202,8 @@ object MacroImpl {
         val newParamss = paramss.map { params =>
           params.map { param =>
             param.decltpe match {
-              case Some(t"$tParamAsType[..$realParam]") => {
-                val decltpe = Some(t"$DslType[$algebraType, ..$realParam]")
+              case Some(Type.Apply(t: Type.Name, realParams)) if t.value == tparamName => {
+                val decltpe = Some(t"$DslType[$algebraType, ..$realParams]")
                 param.copy(decltpe = decltpe)
               }
               case _ => param
@@ -213,13 +213,11 @@ object MacroImpl {
         val interpreterArgs: Seq[Seq[Term.Arg]] = paramss.map { params =>
           params.map { param =>
             param.decltpe match {
-              case Some(t"$tParamAsType[..$realParam]") => {
+              case Some(Type.Apply(t: Type.Name, _)) if t.value == tparamName => {
                 val term = Term.Name(param.name.value)
-                q"$term.apply[$tParamAsType]"
+                q"$term.apply[$tparamAsType]"
               }
-              case _ => {
-                Term.Name(param.name.value)
-              }
+              case _ => Term.Name(param.name.value)
             }
           }
         }
