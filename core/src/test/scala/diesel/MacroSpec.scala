@@ -21,15 +21,16 @@ class MacroSpec extends FunSpec with Matchers {
         def int(i: Int): G[Int]
         def add(l: G[Int], r: G[Int]): G[Int]
         def optInt(i: Option[Int]): G[Option[Int]]
-        def shadowedInt[G[_]](i: G[Int]): G[Int]
-        def mixedInts[H[_]](i: Int, optInt: Option[Int], gInt: G[Int], hInt: H[Int]): G[Int]
+        protected[diesel] def mixedInts[H[_]](i: Int,
+                                              optInt: Option[Int],
+                                              gInt: G[Int],
+                                              hInt: H[Int]): G[Int]
       }
 
       val interpreter = new Maths.Algebra[Id] {
         def int(i: Int)                                                               = i
         def add(l: Id[Int], r: Id[Int])                                               = l + r
         def optInt(i: Option[Int])                                                    = i
-        def shadowedInt[G[_]](i: G[Int])                                              = i
         def mixedInts[H[_]](i: Int, optInt: Option[Int], gInt: Id[Int], hInt: H[Int]) = i
       }
 

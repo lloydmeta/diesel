@@ -94,19 +94,52 @@ object MacroImpl {
         } else None
       }
 
-      val privsErrMsg    = buildErr("Please use only package private or protected", privateMembers)
-      val lackReturnsMsg = buildErr("Return type must be explicitly stated", noReturnType)
-      val wrongKindsMsg  = buildErr("Return type must be explicitly stated", nonMatchingKind)
-      val mutsMsg        = buildErr("Found one or more vars, which are not allowed", vars)
+      val privs        = privateMembers
+      val noRets       = noReturnType
+      val wrongKinds   = nonMatchingKind
+      val muts         = vars
+      val concretes    = concreteMembers
+      val shadowed     = methodsShadowingTparam
+      val allErroneous = (privs ++ noRets ++ wrongKinds ++ muts ++ concretes ++ shadowed).toSet
+      val genUnsupported = templateStatements.filterNot { s =>
+        allErroneous.contains(s) || abstractMembers.contains(s)
+      }.toList
+
+      val privsErrMsg    = buildErr("Please use only package private or protected", privs)
+      val lackReturnsMsg = buildErr("Return types must be explicitly stated", noRets)
+      val wrongKindsMsg = buildErr(
+        s"""The following methods do not return something wrapped in $tparamName[_]. Methods like this can be
+           |added to the trait's companion object
+         """.stripMargin,
+        wrongKinds
+      )
+      val mutsMsg = buildErr("Found one or more vars, which are not allowed", muts)
       val concreteMembersMsg = buildErr(
         """Currently, only abstract defs and vals are supported inside the body of a trait annotated with @diesel.
-          |If you wish to write concrete members, please add them to a companion object (the trait will be expanded into
-          |the object)""".stripMargin,
-        concreteMembers
+          |If you wish to write concrete members, please add them to a companion object (the trait will
+          |be expanded into the object)""".stripMargin,
+        concretes
+      )
+      val overshadowingTypeParam = buildErr(
+        s"""The following methods have type parameters that shadow $tparamName[_] used to annotate the trait.
+           |Besides being confusing for readers of your code, this is not currently supported by diesel
+         """.stripMargin,
+        shadowed
+      )
+      val generallyUnsupported = buildErr(
+        s"""The following are not supported inside the body of a trait annotated with @diesel. Please consider
+           |moving them into a companion object""".stripMargin,
+        genUnsupported
       )
 
       val combinedErrs: Seq[String] =
-        Seq(privsErrMsg, lackReturnsMsg, wrongKindsMsg, mutsMsg, concreteMembersMsg).flatten
+        Seq(generallyUnsupported,
+            privsErrMsg,
+            lackReturnsMsg,
+            wrongKindsMsg,
+            mutsMsg,
+            concreteMembersMsg,
+            overshadowingTypeParam).flatten
       if (combinedErrs.nonEmpty) {
         val errsMsg = combinedErrs.mkString("\n\n")
 
@@ -119,28 +152,24 @@ object MacroImpl {
       }
     }
 
+    private def isPrivateOrProtected(m: Mod): Boolean = {
+      // This is the only reliable way to compare mods...
+      m match {
+        case mod"protected" | mod"private" => true
+        case _                             => false
+      }
+    }
+
     private def privateMembers =
       templateStatements.collect {
-        case d @ Defn.Def(mods, _, _, _, _, _)
-            if mods.exists(
-              e => e == Mod.Private(Name.Anonymous()) || e == Mod.Protected(Name.Anonymous())) => {
+        case d @ Defn.Def(mods, _, _, _, _, _) if mods.exists(isPrivateOrProtected) =>
           d
-        }
-        case v @ Defn.Val(mods, _, _, _)
-            if mods.exists(
-              e => e == Mod.Private(Name.Anonymous()) || e == Mod.Protected(Name.Anonymous())) => {
+        case v @ Defn.Val(mods, _, _, _) if mods.exists(isPrivateOrProtected) =>
           v
-        }
-        case d @ Decl.Def(mods, _, _, _, _)
-            if mods.exists(
-              e => e == Mod.Private(Name.Anonymous()) || e == Mod.Protected(Name.Anonymous())) => {
+        case d @ Decl.Def(mods, _, _, _, _) if mods.exists(isPrivateOrProtected) =>
           d
-        }
-        case v @ Decl.Val(mods, _, _)
-            if mods.exists(
-              e => e == Mod.Private(Name.Anonymous()) || e == Mod.Protected(Name.Anonymous())) => {
+        case v @ Decl.Val(mods, _, _) if mods.exists(isPrivateOrProtected) =>
           v
-        }
       }.toList
 
     private def noReturnType =
@@ -154,15 +183,19 @@ object MacroImpl {
     private def nonMatchingKind =
       templateStatements.collect {
         // <-- For IntelliJ
-        case d @ Decl.Def(_, _, _, _, retType: Type.Select)
+        case d @ Decl.Def(_, _, _, _, Type.Apply(retType: Type.Select, _))
             if retType.name.value != tparam.name.value =>
           d
-        case v @ Decl.Val(_, _, retType: Type.Select) if retType.name.value != tparam.name.value =>
+        case v @ Decl.Def(_, _, _, _, Type.Apply(retType: Type.Select, _))
+            if retType.name.value != tparam.name.value =>
           v
         // For IntelliJ -->
-        case d @ Decl.Def(_, _, _, _, retType: Type.Name) if retType.value != tparam.name.value =>
+        case d @ Decl.Def(_, _, _, _, Type.Apply(retType: Type.Name, _))
+            if retType.value != tparam.name.value =>
           d
-        case v @ Decl.Val(_, _, retType: Type.Name) if retType.value != tparam.name.value => v
+        case v @ Decl.Def(_, _, _, _, Type.Apply(retType: Type.Name, _))
+            if retType.value != tparam.name.value =>
+          v
       }.toList
 
     private def vars =
@@ -174,6 +207,13 @@ object MacroImpl {
       templateStatements.collect {
         case d: Defn.Def => d
         case v: Defn.Val => v
+      }.toList
+
+    private def methodsShadowingTparam =
+      templateStatements.collect {
+        case d @ Decl.Def(_, _, tparams, _, _)
+            if tparams.exists(tp => tp.name.value == tparamName) =>
+          d
       }.toList
 
     private def abstractMembers: List[Decl] =
