@@ -90,6 +90,18 @@ scalacOptions += "-Xplugin-require:macroparadise"
 
 ```
 
+There are also 2 sub-projects that provide implicit conversions from Dsl to a Monad (in the presence of an interpreter)
+so that you can use your DSL with for-comprehensions as demonstrated in @cb372's talk below.
+
+Choose one or the other:
+
+```scala
+// for cats
+libraryDependencies += "com.beachape" %% "diesel-cats" % s"$latest_version"
+// for scalaz  
+libraryDependencies += "com.beachape" %% "diesel-scalaz" % s"$latest_version"
+```
+
 # Credit
 1. [Free vs Tagless final talk](https://github.com/cb372/free-vs-tagless-final)
 2. [Alternatives to GADTS in Scala](https://pchiusano.github.io/2014-05-20/scala-gadts.html)
