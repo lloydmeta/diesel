@@ -14,7 +14,7 @@ lazy val root = Project(id = "diesel-root", base = file("."))
     publishArtifact := false,
     publishLocal := {}
   )
-  .aggregate(core)
+  .aggregate(core, cats,scalaz)
 
 lazy val core = project.settings(
   name := "diesel-core",
@@ -26,6 +26,31 @@ lazy val core = project.settings(
   // macros and a dependency on scala.reflect.
   libraryDependencies ++= commonDependencies
 )
+
+lazy val cats = project
+  .settings(
+    name := "diesel-cats",
+    commonSettings,
+    metaMacroSettings,
+    publishSettings,
+    libraryDependencies ++= {
+      commonDependencies :+ "org.typelevel" %% "cats" % "0.9.0"
+    }
+  )
+  .dependsOn(core)
+
+lazy val scalaz = project
+  .settings(
+    name := "diesel-scalaz",
+    commonSettings,
+    metaMacroSettings,
+    publishSettings,
+    libraryDependencies ++= {
+      commonDependencies :+ "org.scalaz" %% "scalaz-core" % "7.2.10"
+
+    }
+  )
+  .dependsOn(core)
 
 lazy val commonSettings: Seq[Def.Setting[_]] = Seq(
   organization := "com.beachape",
