@@ -21,6 +21,7 @@ class MacroSpec extends FunSpec with Matchers {
         def int(i: Int): G[Int]
         def add(l: G[Int], r: G[Int]): G[Int]
         def optInt(i: Option[Int]): G[Option[Int]]
+        def wrappedInt(i: Int): G[Int] = int(i)
         protected[diesel] def mixedInts[H[_]](i: Int,
                                               optInt: Option[Int],
                                               gInt: G[Int],
