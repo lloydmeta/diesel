@@ -6,11 +6,6 @@ import org.scalatest.{FunSpec, Matchers}
 
 import scala.language.higherKinds
 
-/**
-  * Created by Lloyd on 4/10/17.
-  *
-  * Copyright 2017
-  */
 class ImplicitsSpec extends FunSpec with Matchers {
 
   describe("composing languages using the implicits") {

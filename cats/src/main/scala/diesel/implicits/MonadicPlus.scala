@@ -33,6 +33,9 @@ trait MonadPlusDsl[Alg[_[_]], A] { self =>
 
   import cats.implicits._
 
+  /**
+    * Evaluate this Dsl to a F[A]
+    */
   def apply[F[_]: MonadFilter](implicit interpreter: Alg[F]): F[A]
 
   def map[B](f: A => B): MonadPlusDsl[Alg, B] = new MonadPlusDsl[Alg, B] {
