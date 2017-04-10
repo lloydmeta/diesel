@@ -74,15 +74,17 @@ object MacroImpl {
       ensureSoundMembers(abstracts ++ concretes, locals, imports)
 
       val dslWrappers = generateDslWrappers(abstracts, concretes)
-      val statements  = q"""
+      val traitTemplate =
+        template"""{..${template.early}} with ..${template.parents} { ${template.self} =>
+                    ..$imports
+                    ..$locals
+                    ..$abstracts
+                    ..$concretes
+                   }"""
+      val statements = q"""
                 import scala.language.higherKinds
 
-                trait $algebraType[$tparam] {
-                  ..$imports
-                  ..$locals
-                  ..$abstracts
-                  ..$concretes
-                }
+                trait $algebraType[$tparam] extends $traitTemplate
         """
       TaglessFinalTrees(statements, dslWrappers)
     }

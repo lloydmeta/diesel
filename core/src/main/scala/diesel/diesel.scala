@@ -53,7 +53,7 @@ class diesel(algebra: String = diesel.DefaultAlgebraName) extends scala.annotati
 
   inline def apply(defn: Any): Any = meta {
     val r = internal.MacroImpl.expand(this, defn)
-//    println(r.syntax)
+    println(r.syntax)
     r
   }
 
