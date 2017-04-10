@@ -32,7 +32,9 @@ class ImplicitsSpec extends FunSpec with Matchers {
 
     import Maths._
     import Applicative._
-    def monadicPlusOp(a: Int, b: Int, c: Int) = {
+    import cats.implicits._
+
+    val monadicPlusOp = { (a: Int, b: Int, c: Int) =>
       import monadicplus._
       for {
         i <- add(int(a), int(b)).withAlg[PRG]
@@ -42,7 +44,7 @@ class ImplicitsSpec extends FunSpec with Matchers {
       } yield k
     }
 
-    def monadicOp(a: Int, b: Int, c: Int) = {
+    val monadicOp = { (a: Int, b: Int, c: Int) =>
       import monadic._
       for {
         i <- add(int(a), int(b)).withAlg[PRG]
@@ -53,7 +55,6 @@ class ImplicitsSpec extends FunSpec with Matchers {
 
     implicit def interp[F[_]](implicit F: Monad[F]) =
       new Applicative.Algebra[F] with Maths.Algebra[F] {
-        import cats.implicits._
         def int(i: Int) = F.pure(i)
         def add(l: F[Int], r: F[Int]) =
           for {
@@ -68,8 +69,6 @@ class ImplicitsSpec extends FunSpec with Matchers {
 
     describe("using monadic") {
 
-      import cats.implicits._
-
       it("should work") {
         val program1 = monadicOp(1, 2, 3)
         val program2 = monadicOp(3, 4, 5)
@@ -80,8 +79,6 @@ class ImplicitsSpec extends FunSpec with Matchers {
       }
     }
     describe("using monadicplus") {
-
-      import cats.implicits._
 
       it("should work") {
         val program1 = monadicPlusOp(1, 2, 3)
