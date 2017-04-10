@@ -1,8 +1,11 @@
 package diesel.implicits
 
 import scalaz._
+import scalaz.std.AllInstances._
 import diesel.diesel
 import org.scalatest.{FunSpec, Matchers}
+
+import scala.language.higherKinds
 
 /**
   * Created by Lloyd on 4/10/17.
@@ -11,7 +14,7 @@ import org.scalatest.{FunSpec, Matchers}
   */
 class ImplicitsSpec extends FunSpec with Matchers {
 
-  describe("composing inside a monadic environment") {
+  describe("composing languages using the implicits") {
 
     @diesel
     trait Maths[G[_]] {
@@ -20,58 +23,72 @@ class ImplicitsSpec extends FunSpec with Matchers {
     }
 
     @diesel
-    trait ApplicativeInterpreter[F[_]] {
+    trait Applicative[F[_]] {
       def map2[A, B, C](fa: F[A], fb: F[B])(f: (A, B) => C): F[C]
       def pure[A](a: A): F[A]
     }
 
-    class Environment[M[_]: Monad: MonadPlus](implicit mathsInterp: Maths.Algebra[M],
-                                              applicInterp: ApplicativeInterpreter.Algebra[M]) {
+    import Maths._
+    import Applicative._
+    import scalaz.Scalaz._
 
-      import scalaz.Scalaz._
+    // Our combined algebra type
+    type PRG[A[_]] = Applicative.Algebra[A] with Maths.Algebra[A]
 
-      import Maths._
-      import ApplicativeInterpreter._
-
-      def op(a: Int, b: Int, c: Int): M[Int] =
-        for {
-          s <- add(int(a), int(b))
-          l <- pure(s)
-          if l > 3
-          r <- add(int(l), int(c))
-        } yield r
-
-      def plus(a: Int, b: Int): M[Int] = add(int(a), int(b)).flatMap(pure(_))
+    val monadicPlusOp = { (a: Int, b: Int, c: Int) =>
+      import monadicplus._
+      for {
+        i <- add(int(a), int(b)).withAlg[PRG]
+        if i > 3
+        j <- pure(c).withAlg[PRG]
+        k <- add(int(i), int(j)).withAlg[PRG]
+      } yield k
     }
 
-    describe("evaluating using the environment") {
+    val monadicOp = { (a: Int, b: Int, c: Int) =>
+      import monadic._
+      for {
+        i <- add(int(a), int(b)).withAlg[PRG]
+        j <- pure(c).withAlg[PRG]
+        k <- add(int(i), int(j)).withAlg[PRG]
+      } yield k
+    }
 
-      import scalaz.Scalaz._
-
-      implicit def maths[F[_]](implicit F: Monad[F]): Maths.Algebra[F] = new Maths.Algebra[F] {
+    implicit def interp[F[_]](implicit F: Monad[F]) =
+      new Applicative.Algebra[F] with Maths.Algebra[F] {
         def int(i: Int) = F.pure(i)
         def add(l: F[Int], r: F[Int]) =
           for {
             x <- l
             y <- r
           } yield x + y
+
+        def map2[A, B, C](fa: F[A], fb: F[B])(f: (A, B) => C): F[C] =
+          F.apply2(fa, fb)(f)
+        def pure[A](a: A): F[A] = F.pure(a)
       }
 
-      implicit def applicative[F[_]](
-          implicit F: Applicative[F]): ApplicativeInterpreter.Algebra[F] =
-        new ApplicativeInterpreter.Algebra[F] {
-          def pure[A](a: A): F[A]                                     = F.pure(a)
-          def map2[A, B, C](fa: F[A], fb: F[B])(f: (A, B) => C): F[C] = F.apply2(fa, fb)(f)
-        }
-
-      val optEnv  = new Environment[Option]
-      val listEnv = new Environment[List]
+    describe("using monadic") {
 
       it("should work") {
-        optEnv.op(1, 2, 3) shouldBe None
-        optEnv.op(4, 4, 3) shouldBe Some(11)
-        listEnv.op(1, 2, 3) shouldBe Nil
-        listEnv.op(4, 4, 3) shouldBe List(11)
+        val program1 = monadicOp(1, 2, 3)
+        val program2 = monadicOp(3, 4, 5)
+        program1[Option] shouldBe Some(6)
+        program1[List] shouldBe List(6)
+        program2[Option] shouldBe Some(12)
+        program2[List] shouldBe List(12)
+      }
+    }
+
+    describe("using monadicplus") {
+
+      it("should work") {
+        val program1 = monadicPlusOp(1, 2, 3)
+        val program2 = monadicPlusOp(3, 4, 5)
+        program1[Option] shouldBe None
+        program1[List] shouldBe Nil
+        program2[Option] shouldBe Some(12)
+        program2[List] shouldBe List(12)
       }
     }
 

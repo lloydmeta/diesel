@@ -5,7 +5,8 @@ object KVSApp extends App {
 
   import KVStore._
 
-  def program[F[_]](implicit kvsAlg: KVSOps.Algebra[F]) = {
+  // This is one way to compose a program
+  def program1[F[_]](implicit kvsAlg: KVSOps.Algebra[F]) = {
     import kvsAlg._
     import cats.implicits._
     for {
@@ -17,7 +18,21 @@ object KVSApp extends App {
     } yield n
   }
 
-  val r = program[KVStoreState].run(Map.empty).value
-  println(s"Result: $r")
+  val program2 = {
+    import KVSOps._
+    import diesel.implicits.monadic._
+    for {
+      _ <- put("wild-cats", 90)
+      _ <- update[Int, Int]("wild-cats", _ + 10)
+      _ <- put("tame-cats", 55)
+      n <- get[Int]("wild-cats")
+      _ <- delete("tame-cats")
+    } yield n
+  }
+
+  val r1 = program1[KVStoreState].run(Map.empty).value
+  println(s"Result 1: $r1")
+  val r2 = program2[KVStoreState].run(r1._1).value
+  println(s"Result 2: $r2")
 
 }

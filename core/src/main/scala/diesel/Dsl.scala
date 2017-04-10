@@ -13,7 +13,10 @@ import scala.language.higherKinds
 trait Dsl[Alg[_[_]], A] {
 
   /**
+    * Evaluate this Dsl to a F[A]
+    *
     * Provide an interpreter in order to evaluate to an F[A]
+    *
     * @param interpreter of type Alg[F]
     * @tparam F a kind
     * @return F[A]
