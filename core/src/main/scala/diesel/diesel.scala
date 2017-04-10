@@ -1,6 +1,6 @@
 package diesel
 
-import scala.meta._
+import scala.annotation.compileTimeOnly
 
 /**
   * Annotation used for expanding a trait parameterised with a type that takes
@@ -47,6 +47,7 @@ import scala.meta._
   * }}}
   */
 @SuppressWarnings(Array("org.wartremover.warts.DefaultArguments"))
+@compileTimeOnly("Enable macro paradise to expand macro annotations")
 class diesel(algebra: String = diesel.DefaultAlgebraName) extends scala.annotation.StaticAnnotation {
 
   inline def apply(defn: Any): Any = meta {
@@ -60,3 +61,10 @@ class diesel(algebra: String = diesel.DefaultAlgebraName) extends scala.annotati
 object diesel {
   val DefaultAlgebraName: String = "Algebra"
 }
+
+/**
+  * Used to denote declarations inside a @diesel-annotated trait so that it will
+  * be forwarded as-is into the generated Algebra trait, without generating any DSL-wrapper
+  * methods
+  */
+class local extends scala.annotation.StaticAnnotation

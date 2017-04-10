@@ -24,6 +24,7 @@ object MacroImpl {
         q"""..$mods object ${Term.Name(tname.value)} {
              ..${statements.stats}
              ..$dslWrappers
+
            }
           """
       }
@@ -59,43 +60,60 @@ object MacroImpl {
 
   private class TaglessFinalBuilder(algebraType: Type.Name, tparam: Type.Param, template: Template) {
 
-    private val tparamName         = tparam.name.value
-    private val tparamAsType       = Type.fresh().copy(tparamName)
-    private val templateStatements = template.stats.toSeq.flatten
+    private val tparamName                = tparam.name.value
+    private val tparamAsType              = Type.fresh().copy(tparamName)
+    private val templateStatements        = template.stats.toSeq.flatten
+    private val templateStatementsWithIdx = templateStatements.zipWithIndex
 
     def build(): TaglessFinalTrees = {
       // Extract common variables
-      val abstracts = abstractMembers
 
-      ensureSoundMembers(abstracts)
+      val importsWithIdx   = importStats
+      val abstractsWithIdx = abstractMembers
+      val concretesWithIdx = concreteMembers
+      val localsWithIdx    = localMembers
 
-      val dslWrappers = generateDslWrappers(abstracts)
+      val imports   = importsWithIdx.map(_._1)
+      val abstracts = abstractsWithIdx.map(_._1)
+      val concretes = concretesWithIdx.map(_._1)
+      val locals    = localsWithIdx.map(_._1)
+
+      ensureSoundMembers(abstracts ++ concretes, locals, imports)
+
+      // Sometimes the ordering matters (e.g. when there are vals involved), so slot in
+      // the supported statements in the order the user declared them
+      val sortedTemplateStats = {
+        val ss = importsWithIdx ++ abstractsWithIdx ++ concretesWithIdx ++ localsWithIdx
+        ss.sortBy(_._2).map(_._1)
+      }
+      val traitTemplate =
+        template"""{..${template.early}} with ..${template.parents} { ${template.self} =>
+                    ..$sortedTemplateStats
+                   }"""
       val statements  = q"""
                 import scala.language.higherKinds
 
-                trait $algebraType[$tparam] {
-                  ..$abstracts
-                }
+                trait $algebraType[$tparam] extends $traitTemplate
         """
+      val dslWrappers = generateDslWrappers(abstracts, concretes)
       TaglessFinalTrees(statements, dslWrappers)
     }
 
-    private def ensureSoundMembers(abstractMembers: List[Decl]): Unit = {
-      val absMembersSet: Set[Stat] = abstractMembers.toSet
+    private def ensureSoundMembers(dslMembers: List[Stat],
+                                   locals: List[Stat],
+                                   imports: List[Import]): Unit = {
+      val dslMembersSet = dslMembers.toSet
+      val localsSet     = locals.toSet
       // The spaces in multiline strings are significant
       val statsWithErrors = findErrors(
         Seq(
-          ("Please use only package private or protected modifiers.", privateMembersPf),
-          ("Return types must be explicitly stated.", noReturnTypePf),
+          ("Please use only package private or protected modifiers.", privateMembersPf(localsSet)),
+          ("Return types must be explicitly stated.", noReturnTypePf(localsSet)),
           (s"""The return type of this method is not wrapped in $tparamName[_]. Methods like this can be
              |      added to the trait's companion object.""".stripMargin,
-           nonMatchingKindPf(absMembersSet)),
-          ("Vars are not allowed.", varsPf),
-          ("""Currently, only abstract defs and vals are supported inside the body of a trait annotated with @diesel.
-             |      If you wish to write concrete members, please add them to a companion object (the trait will
-             |      be expanded into the object).""".stripMargin,
-           concreteMembersPf),
-          (s"""This following method has a type parameter that shadows the $tparamName[_] used to annotate the trait.
+           nonMatchingKindPf(dslMembersSet ++ localsSet)),
+          ("Vars are not allowed.", varsPf(localsSet)),
+          (s"""This method has a type parameter that shadows the $tparamName[_] used to annotate the trait.
              |      Besides being confusing for readers of your code, this is not currently supported by diesel.""".stripMargin,
            methodsShadowingTParamPF)
         )
@@ -116,7 +134,8 @@ object MacroImpl {
 
       val erroneousStats = statsWithErrors.map(_._1).toSet
       val genUnsupportedStats = templateStatements.filterNot { s =>
-        erroneousStats.contains(s) || absMembersSet.contains(s)
+        erroneousStats.contains(s) || dslMembersSet.contains(s) || localsSet.contains(s) || imports
+          .contains(s)
       }
       val genUnsupportedErrs = {
         if (genUnsupportedStats.nonEmpty) {
@@ -140,72 +159,76 @@ object MacroImpl {
              |
              |Looks like you're using some unsupported syntax in a trait annotated with @diesel.
              |
+             |If you want to have some of these moved as-is into the generated algebra, please use the
+             |@local annotation. Note that such members will not have DSL-wrapping methods generated
+             |for them.
+             |
              |$errsMsg
            """.stripMargin)
       }
     }
 
-    type StatPF = PartialFunction[Stat, Stat]
-    private def isPrivateOrProtected(m: Mod): Boolean = {
-      // This is the only reliable way to compare mods...
-      m match {
-        case mod"protected" | mod"private" => true
-        case _                             => false
-      }
-    }
+    private def concreteMembers: List[(Defn, Int)] =
+      templateStatementsWithIdx.collect {
+        case (d: Defn.Def, i) => (d, i)
+        case (v: Defn.Val, i) => (v, i)
+      }.toList
 
-    private val privateMembersPf: StatPF = {
-      case d @ Defn.Def(mods, _, _, _, _, _) if mods.exists(isPrivateOrProtected) =>
-        d
-      case v @ Defn.Val(mods, _, _, _) if mods.exists(isPrivateOrProtected) =>
-        v
-      case d @ Decl.Def(mods, _, _, _, _) if mods.exists(isPrivateOrProtected) =>
-        d
-      case v @ Decl.Val(mods, _, _) if mods.exists(isPrivateOrProtected) =>
-        v
-    }
-    private val noReturnTypePf: StatPF = {
-      case d @ Defn.Def(_, _, _, _, None, _) =>
-        d
-      case v @ Defn.Val(_, _, None, _) =>
-        v
-    }
-
-    private def nonMatchingKindPf(absMems: Set[Stat]): StatPF = {
-      case d: Decl.Def if !absMems.contains(d) => d
-      case v: Decl.Val if !absMems.contains(v) => v
-    }
-
-    private val varsPf: StatPF = {
-      case v: Defn.Var => v
-    }
-
-    private val concreteMembersPf: StatPF = {
-      case d: Defn.Def => d
-      case v: Defn.Val => v
-    }
-
-    private val methodsShadowingTParamPF: StatPF = {
-      case d @ Decl.Def(_, _, tparams, _, _)
-          if tparams.exists(tp => tp.name.value == tparamName) =>
-        d
-    }
-
-    private def abstractMembers: List[Decl] =
-      templateStatements.collect {
-        case m @ Decl.Def(_, _, _, _, Type.Apply(retName: Type.Select, _))
+    private def abstractMembers: List[(Decl, Int)] =
+      templateStatementsWithIdx.collect {
+        case (d @ Decl.Def(_, _, _, _, Type.Apply(retName: Type.Select, _)), i)
             if retName.name.value == tparamName =>
-          m
-        case v @ Decl.Val(_, _, Type.Apply(retName: Type.Select, _))
+          (d, i)
+        case (v @ Decl.Val(_, _, Type.Apply(retName: Type.Select, _)), i)
             if retName.name.value == tparamName =>
-          v
+          (v, i)
 
-        case m @ Decl.Def(_, _, _, _, Type.Apply(retName: Type.Name, _))
+        case (d @ Decl.Def(_, _, _, _, Type.Apply(retName: Type.Name, _)), i)
             if retName.value == tparamName =>
-          m
-        case v @ Decl.Val(_, _, Type.Apply(retName: Type.Name, _))
+          (d, i)
+        case (v @ Decl.Val(_, _, Type.Apply(retName: Type.Name, _)), i)
             if retName.value == tparamName =>
-          v
+          (v, i)
+      }.toList
+
+    private def importStats: List[(Import, Int)] =
+      templateStatementsWithIdx.collect {
+        case (imp: Import, i) => (imp, i)
+      }.toList
+
+    private def isLocal(mod: Mod): Boolean = mod match {
+      case mod"@local" | mod"@diesel.local" => true
+      case _                                => false
+    }
+
+    private def localMembers: List[(Stat, Int)] =
+      templateStatementsWithIdx.collect {
+        case s @ (Decl.Def(mods, _, _, _, _), _) if mods.exists(isLocal) =>
+          s
+        case s @ (Decl.Val(mods, _, _), _) if mods.exists(isLocal) =>
+          s
+        case s @ (Decl.Type(mods, _, _, _), _) if mods.exists(isLocal) =>
+          s
+        case s @ (Decl.Var(mods, _, _), _) if mods.exists(isLocal) =>
+          s
+
+        case s @ (Defn.Def(mods, _, _, _, _, _), _) if mods.exists(isLocal) =>
+          s
+        case s @ (Defn.Val(mods, _, _, _), _) if mods.exists(isLocal) =>
+          s
+        case s @ (Defn.Type(mods, _, _, _), _) if mods.exists(isLocal) =>
+          s
+        case s @ (Defn.Var(mods, _, _, _), _) if mods.exists(isLocal) =>
+          s
+        case s @ (Defn.Macro(mods, _, _, _, _, _), _) if mods.exists(isLocal) =>
+          s
+        case s @ (Defn.Trait(mods, _, _, _, _), _) if mods.exists(isLocal) =>
+          s
+        case s @ (Defn.Class(mods, _, _, _, _), _) if mods.exists(isLocal) =>
+          s
+        case s @ (Defn.Object(mods, _, _), _) if mods.exists(isLocal) =>
+          s
+        case s @ (q"..$mods def this(...$paramss) = $expr", _) if mods.exists(isLocal) => s
       }.toList
 
     private def findErrors(
@@ -223,7 +246,51 @@ object MacroImpl {
       }
     }
 
-    private def generateDslWrappers(decl: List[Decl]): List[Defn] = {
+    type StatPF = PartialFunction[Stat, Stat]
+    private def isPrivateOrProtected(m: Mod): Boolean = {
+      // This is the only reliable way to compare mods...
+      m match {
+        case mod"protected" | mod"private" => true
+        case _                             => false
+      }
+    }
+
+    private def privateMembersPf(exempt: Set[Stat]): StatPF = {
+      case d @ Defn.Def(mods, _, _, _, _, _)
+          if mods.exists(isPrivateOrProtected) && !exempt.contains(d) =>
+        d
+      case v @ Defn.Val(mods, _, _, _)
+          if mods.exists(isPrivateOrProtected) && !exempt.contains(v) =>
+        v
+      case d @ Decl.Def(mods, _, _, _, _)
+          if mods.exists(isPrivateOrProtected) && !exempt.contains(d) =>
+        d
+      case v @ Decl.Val(mods, _, _) if mods.exists(isPrivateOrProtected) && !exempt.contains(v) =>
+        v
+    }
+    private def noReturnTypePf(exempt: Set[Stat]): StatPF = {
+      case d @ Defn.Def(_, _, _, _, None, _) if !exempt.contains(d) =>
+        d
+      case v @ Defn.Val(_, _, None, _) if !exempt.contains(v) =>
+        v
+    }
+
+    private def nonMatchingKindPf(exempt: Set[Stat]): StatPF = {
+      case d: Decl.Def if !exempt.contains(d) => d
+      case v: Decl.Val if !exempt.contains(v) => v
+    }
+
+    private def varsPf(exempt: Set[Stat]): StatPF = {
+      case v: Defn.Var if !exempt.contains(v) => v
+    }
+
+    private val methodsShadowingTParamPF: StatPF = {
+      case d @ Decl.Def(_, _, tparams, _, _)
+          if tparams.exists(tp => tp.name.value == tparamName) =>
+        d
+    }
+
+    private def generateDslWrappers(decls: List[Decl], defns: List[Defn]): List[Defn] = {
       def buildWrappedDef(mods: Seq[Mod],
                           name: Term.Name,
                           paramss: Seq[Seq[Term.Param]],
@@ -259,6 +326,7 @@ object MacroImpl {
         Defn.Def(mods, name, tparams, newParamss, Some(newDeclTpe), body)
       }
 
+      // TODO move abort to ensureSoundness
       def buildWrappedVal(mods: Seq[Mod], pats: Seq[Pat.Var.Term], declTargs: Seq[Type]) = {
         val patName = pats match {
           case Seq(p) => p
@@ -272,7 +340,7 @@ object MacroImpl {
         Defn.Val(mods, pats, Some(newDeclTpe), body)
       }
 
-      decl.map {
+      (decls ++ defns).collect {
         case Decl.Def(mods, name, tparams, paramss, Type.Apply(retName: Type.Select, declTargs))
             if retName.name.value == tparamName =>
           buildWrappedDef(mods, name, paramss, tparams, declTargs)
@@ -282,12 +350,38 @@ object MacroImpl {
             if retName.name.value == tparamName =>
           buildWrappedVal(mods, pats, declTargs)
 
+        case Defn.Def(mods,
+                      name,
+                      tparams,
+                      paramss,
+                      Some(Type.Apply(retName: Type.Select, declTargs)),
+                      _) if retName.name.value == tparamName =>
+          buildWrappedDef(mods, name, paramss, tparams, declTargs)
+        case Defn.Val(mods,
+                      Seq(patName: Pat.Var.Term),
+                      Some(Type.Apply(retName: Type.Select, declTargs)),
+                      _) if retName.name.value == tparamName =>
+          buildWrappedVal(mods, Seq(patName), declTargs)
+
         case Decl.Def(mods, name, tparams, paramss, Type.Apply(retName: Type.Name, declTargs))
             if retName.value == tparamName =>
           buildWrappedDef(mods, name, paramss, tparams, declTargs)
         case v @ Decl.Val(mods, pats, Type.Apply(retName: Type.Name, declTargs))
             if retName.value == tparamName =>
           buildWrappedVal(mods, pats, declTargs)
+
+        case Defn.Def(mods,
+                      name,
+                      tparams,
+                      paramss,
+                      Some(Type.Apply(retName: Type.Name, declTargs)),
+                      _) if retName.value == tparamName =>
+          buildWrappedDef(mods, name, paramss, tparams, declTargs)
+        case v @ Defn.Val(mods,
+                          Seq(patName: Pat.Var.Term, _ @_ *),
+                          Some(Type.Apply(retName: Type.Name, declTargs)),
+                          _) if retName.value == tparamName =>
+          buildWrappedVal(mods, Seq(patName), declTargs)
       }
     }
 

@@ -17,10 +17,12 @@ class MacroSpec extends FunSpec with Matchers {
     describe("Simple Maths DSL") {
 
       @diesel
-      trait Maths[G[_]] {
+      trait Maths[G[_]] { self =>
+        import scala.annotation._
         def int(i: Int): G[Int]
         def add(l: G[Int], r: G[Int]): G[Int]
         def optInt(i: Option[Int]): G[Option[Int]]
+        def wrappedInt(i: Int): G[Int] = self.int(i)
         protected[diesel] def mixedInts[H[_]](i: Int,
                                               optInt: Option[Int],
                                               gInt: G[Int],
