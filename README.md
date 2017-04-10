@@ -108,6 +108,11 @@ libraryDependencies += "com.beachape" %% "diesel-scalaz" % s"$latest_version"
 ```
 
 # Credit
+
+Learnt quite a lot about tagless final from the following resources.
+
 1. [Free vs Tagless final talk](https://github.com/cb372/free-vs-tagless-final)
 2. [Alternatives to GADTS in Scala](https://pchiusano.github.io/2014-05-20/scala-gadts.html)
 3. [Quark talk](https://www.slideshare.net/jdegoes/quark-a-purelyfunctional-scala-dsl-for-data-processing-analytics)
+4. [Tagless final effects à la Ermine writers](https://failex.blogspot.jp/2016/12/tagless-final-effects-la-ermine-writers.html)
+5. [EDSLs as functions](http://typelevel.org/blog/2016/10/26/edsls-part-2.html)
