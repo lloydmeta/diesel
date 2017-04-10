@@ -1,12 +1,12 @@
 import cats.Monad
 import cats.data.State
-import diesel._
+import diesel.{diesel, local}
 
 @SuppressWarnings(Array("org.wartremover.warts.Any"))
-object KVSExample {
+object KVStore {
 
   @diesel
-  trait KVS[F[_]] {
+  trait KVSOps[F[_]] {
 
     @local
     implicit def m: Monad[F]
@@ -30,7 +30,7 @@ object KVSExample {
   }
 
   type KVStoreState[A] = State[Map[String, Any], A]
-  implicit val pureInterpreter = new KVS.Algebra[KVStoreState] {
+  implicit object PureKVSInterp extends KVSOps.Algebra[KVStoreState] {
     val m: Monad[KVStoreState] = Monad[KVStoreState]
 
     def put[A](k: String, o: A): KVStoreState[Unit] = State.modify(_.updated(k, o))
@@ -38,22 +38,6 @@ object KVSExample {
     def get[A](k: String): KVStoreState[Option[A]] = State.inspect(_.get(k).map(_.asInstanceOf[A]))
 
     def delete(k: String): KVStoreState[Unit] = State.modify(_ - k)
-  }
-
-  import implicits._
-  import KVS._
-
-  val program: KVStoreState[Option[Int]] = for {
-    _ <- put("wild-cats", 2)
-    _ <- update[Int, Int]("wild-cats", _ + 12)
-    _ <- put("tame-cats", 5)
-    n <- get[Int]("wild-cats")
-    _ <- delete("tame-cats")
-  } yield n
-
-  def main(args: Array[String]): Unit = {
-    val r = program.run(Map.empty).value
-    println(s"Result: $r")
   }
 
 }
