@@ -25,9 +25,8 @@ class ImplicitsSpec extends FunSpec with Matchers {
       def pure[A](a: A): F[A]
     }
 
-    class Environment[M[_]: Monad: MonadPlus](
-        implicit interpreter: Maths.Algebra[M],
-        applicativeInterpreter: ApplicativeInterpreter.Algebra[M]) {
+    class Environment[M[_]: Monad: MonadPlus](implicit mathsInterp: Maths.Algebra[M],
+                                              applicInterp: ApplicativeInterpreter.Algebra[M]) {
 
       import scalaz.Scalaz._
 
