@@ -60,32 +60,42 @@ object MacroImpl {
 
   private class TaglessFinalBuilder(algebraType: Type.Name, tparam: Type.Param, template: Template) {
 
-    private val tparamName         = tparam.name.value
-    private val tparamAsType       = Type.fresh().copy(tparamName)
-    private val templateStatements = template.stats.toSeq.flatten
+    private val tparamName                = tparam.name.value
+    private val tparamAsType              = Type.fresh().copy(tparamName)
+    private val templateStatements        = template.stats.toSeq.flatten
+    private val templateStatementsWithIdx = templateStatements.zipWithIndex
 
     def build(): TaglessFinalTrees = {
       // Extract common variables
-      val abstracts = abstractMembers
-      val locals    = localMembers
-      val concretes = concreteMembers
-      val imports   = importStats
+
+      val importsWithIdx   = importStats
+      val abstractsWithIdx = abstractMembers
+      val concretesWithIdx = concreteMembers
+      val localsWithIdx    = localMembers
+
+      val imports   = importsWithIdx.map(_._1)
+      val abstracts = abstractsWithIdx.map(_._1)
+      val concretes = concretesWithIdx.map(_._1)
+      val locals    = localsWithIdx.map(_._1)
 
       ensureSoundMembers(abstracts ++ concretes, locals, imports)
 
-      val dslWrappers = generateDslWrappers(abstracts, concretes)
+      // Sometimes the ordering matters (e.g. when there are vals involved), so slot in
+      // the supported statements in the order the user declared them
+      val sortedTemplateStats = {
+        val ss = importsWithIdx ++ abstractsWithIdx ++ concretesWithIdx ++ localsWithIdx
+        ss.sortBy(_._2).map(_._1)
+      }
       val traitTemplate =
         template"""{..${template.early}} with ..${template.parents} { ${template.self} =>
-                    ..$imports
-                    ..$locals
-                    ..$abstracts
-                    ..$concretes
+                    ..$sortedTemplateStats
                    }"""
-      val statements = q"""
+      val statements  = q"""
                 import scala.language.higherKinds
 
                 trait $algebraType[$tparam] extends $traitTemplate
         """
+      val dslWrappers = generateDslWrappers(abstracts, concretes)
       TaglessFinalTrees(statements, dslWrappers)
     }
 
@@ -158,6 +168,84 @@ object MacroImpl {
       }
     }
 
+    private def concreteMembers: List[(Defn, Int)] =
+      templateStatementsWithIdx.collect {
+        case (d: Defn.Def, i) => (d, i)
+        case (v: Defn.Val, i) => (v, i)
+      }.toList
+
+    private def abstractMembers: List[(Decl, Int)] =
+      templateStatementsWithIdx.collect {
+        case (d @ Decl.Def(_, _, _, _, Type.Apply(retName: Type.Select, _)), i)
+            if retName.name.value == tparamName =>
+          (d, i)
+        case (v @ Decl.Val(_, _, Type.Apply(retName: Type.Select, _)), i)
+            if retName.name.value == tparamName =>
+          (v, i)
+
+        case (d @ Decl.Def(_, _, _, _, Type.Apply(retName: Type.Name, _)), i)
+            if retName.value == tparamName =>
+          (d, i)
+        case (v @ Decl.Val(_, _, Type.Apply(retName: Type.Name, _)), i)
+            if retName.value == tparamName =>
+          (v, i)
+      }.toList
+
+    private def importStats: List[(Import, Int)] =
+      templateStatementsWithIdx.collect {
+        case (imp: Import, i) => (imp, i)
+      }.toList
+
+    private def isLocal(mod: Mod): Boolean = mod match {
+      case mod"@local" | mod"@diesel.local" => true
+      case _                                => false
+    }
+
+    private def localMembers: List[(Stat, Int)] =
+      templateStatementsWithIdx.collect {
+        case s @ (Decl.Def(mods, _, _, _, _), _) if mods.exists(isLocal) =>
+          s
+        case s @ (Decl.Val(mods, _, _), _) if mods.exists(isLocal) =>
+          s
+        case s @ (Decl.Type(mods, _, _, _), _) if mods.exists(isLocal) =>
+          s
+        case s @ (Decl.Var(mods, _, _), _) if mods.exists(isLocal) =>
+          s
+
+        case s @ (Defn.Def(mods, _, _, _, _, _), _) if mods.exists(isLocal) =>
+          s
+        case s @ (Defn.Val(mods, _, _, _), _) if mods.exists(isLocal) =>
+          s
+        case s @ (Defn.Type(mods, _, _, _), _) if mods.exists(isLocal) =>
+          s
+        case s @ (Defn.Var(mods, _, _, _), _) if mods.exists(isLocal) =>
+          s
+        case s @ (Defn.Macro(mods, _, _, _, _, _), _) if mods.exists(isLocal) =>
+          s
+        case s @ (Defn.Trait(mods, _, _, _, _), _) if mods.exists(isLocal) =>
+          s
+        case s @ (Defn.Class(mods, _, _, _, _), _) if mods.exists(isLocal) =>
+          s
+        case s @ (Defn.Object(mods, _, _), _) if mods.exists(isLocal) =>
+          s
+        case s @ (q"..$mods def this(...$paramss) = $expr", _) if mods.exists(isLocal) => s
+      }.toList
+
+    private def findErrors(
+        msgsToPfs: Seq[(String, PartialFunction[Stat, Stat])]): Seq[(Stat, Seq[String])] = {
+      templateStatements.foldLeft(Seq.empty[(Stat, Seq[String])]) {
+        case (acc, stat) =>
+          val errs = msgsToPfs.foldLeft(Seq.empty[String]) {
+            case (innerAcc, (str, pf)) =>
+              if (pf.isDefinedAt(stat))
+                innerAcc :+ str
+              else
+                innerAcc
+          }
+          if (errs.nonEmpty) acc :+ (stat -> errs) else acc
+      }
+    }
+
     type StatPF = PartialFunction[Stat, Stat]
     private def isPrivateOrProtected(m: Mod): Boolean = {
       // This is the only reliable way to compare mods...
@@ -196,48 +284,10 @@ object MacroImpl {
       case v: Defn.Var if !exempt.contains(v) => v
     }
 
-    private val concreteMembersPf: PartialFunction[Stat, Defn] = {
-      case d: Defn.Def => d
-      case v: Defn.Val => v
-    }
-    private def concreteMembers: List[Defn] = templateStatements.collect(concreteMembersPf).toList
-
     private val methodsShadowingTParamPF: StatPF = {
       case d @ Decl.Def(_, _, tparams, _, _)
           if tparams.exists(tp => tp.name.value == tparamName) =>
         d
-    }
-
-    private def abstractMembers: List[Decl] =
-      templateStatements.collect {
-        case m @ Decl.Def(_, _, _, _, Type.Apply(retName: Type.Select, _))
-            if retName.name.value == tparamName =>
-          m
-        case v @ Decl.Val(_, _, Type.Apply(retName: Type.Select, _))
-            if retName.name.value == tparamName =>
-          v
-
-        case m @ Decl.Def(_, _, _, _, Type.Apply(retName: Type.Name, _))
-            if retName.value == tparamName =>
-          m
-        case v @ Decl.Val(_, _, Type.Apply(retName: Type.Name, _))
-            if retName.value == tparamName =>
-          v
-      }.toList
-
-    private def findErrors(
-        msgsToPfs: Seq[(String, PartialFunction[Stat, Stat])]): Seq[(Stat, Seq[String])] = {
-      templateStatements.foldLeft(Seq.empty[(Stat, Seq[String])]) {
-        case (acc, stat) =>
-          val errs = msgsToPfs.foldLeft(Seq.empty[String]) {
-            case (innerAcc, (str, pf)) =>
-              if (pf.isDefinedAt(stat))
-                innerAcc :+ str
-              else
-                innerAcc
-          }
-          if (errs.nonEmpty) acc :+ (stat -> errs) else acc
-      }
     }
 
     private def generateDslWrappers(decls: List[Decl], defns: List[Defn]): List[Defn] = {
@@ -334,46 +384,6 @@ object MacroImpl {
           buildWrappedVal(mods, Seq(patName), declTargs)
       }
     }
-
-    private def importStats: List[Import] =
-      templateStatements.collect {
-        case i: Import => i
-      }.toList
-
-    private def isLocal(mod: Mod): Boolean = mod match {
-      case mod"@local" | mod"@diesel.local" => true
-      case _                                => false
-    }
-
-    private def localMembers: List[Stat] =
-      templateStatements.collect {
-        case s @ Decl.Def(mods, _, _, _, _) if mods.exists(isLocal) =>
-          s
-        case s @ Decl.Val(mods, _, _) if mods.exists(isLocal) =>
-          s
-        case s @ Decl.Type(mods, _, _, _) if mods.exists(isLocal) =>
-          s
-        case s @ Decl.Var(mods, _, _) if mods.exists(isLocal) =>
-          s
-
-        case s @ Defn.Def(mods, _, _, _, _, _) if mods.exists(isLocal) =>
-          s
-        case s @ Defn.Val(mods, _, _, _) if mods.exists(isLocal) =>
-          s
-        case s @ Defn.Type(mods, _, _, _) if mods.exists(isLocal) =>
-          s
-        case s @ Defn.Var(mods, _, _, _) if mods.exists(isLocal) =>
-          s
-        case s @ Defn.Macro(mods, _, _, _, _, _) if mods.exists(isLocal) =>
-          s
-        case s @ Defn.Trait(mods, _, _, _, _) if mods.exists(isLocal) =>
-          s
-        case s @ Defn.Class(mods, _, _, _, _) if mods.exists(isLocal) =>
-          s
-        case s @ Defn.Object(mods, _, _) if mods.exists(isLocal) =>
-          s
-        case s @ q"..$mods def this(...$paramss) = $expr" if mods.exists(isLocal) => s
-      }.toList
 
   }
 
