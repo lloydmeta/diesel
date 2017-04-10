@@ -30,7 +30,7 @@ object KVStore {
   }
 
   type KVStoreState[A] = State[Map[String, Any], A]
-  implicit object PureKVSInterp extends KVSOps.Algebra[KVStoreState] {
+  trait KVSStateInterpreter extends KVSOps.Algebra[KVStoreState] {
     val m: Monad[KVStoreState] = Monad[KVStoreState]
 
     def put[A](k: String, o: A): KVStoreState[Unit] = State.modify(_.updated(k, o))
@@ -39,5 +39,6 @@ object KVStore {
 
     def delete(k: String): KVStoreState[Unit] = State.modify(_ - k)
   }
+  implicit val PureKVSInterp = new KVSStateInterpreter {}
 
 }

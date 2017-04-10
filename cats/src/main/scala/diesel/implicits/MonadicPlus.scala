@@ -6,7 +6,7 @@ import diesel.Dsl
 import scala.language.higherKinds
 
 /**
-  * Implicity converts DSLs to MonadicPlusDsl so that you can use them in for-comprehensions.
+  * Implicitly converts DSLs to MonadicPlusDsl so that you can use them in for-comprehensions.
   *
   * Note, this is more powerful than importing from monadic because this requires a MonadPlus instance
   * for the F[_] in the eventual interpreter that you use to get your results.

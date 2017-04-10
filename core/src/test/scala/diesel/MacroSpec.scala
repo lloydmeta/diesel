@@ -16,53 +16,17 @@ class MacroSpec extends FunSpec with Matchers {
 
     describe("Simple Maths DSL") {
 
-      object Maths {
-
-        import scala.language.higherKinds
-
-        trait Algebra[G[_]] {
-          def int(i: Int): G[Int]
-
-          def add(l: G[Int], r: G[Int]): G[Int]
-
-          def optInt(i: Option[Int]): G[Option[Int]]
-
-          def wrappedInt(i: Int): G[Int] = self.int(i)
-
-          protected[diesel] def mixedInts[H[_]](i: Int,
-                                                optInt: Option[Int],
-                                                gInt: G[Int],
-                                                hInt: H[Int]): G[Int]
-        }
-
-        def int(i: Int): _root_.diesel.Dsl[Algebra, Int] = new _root_.diesel.Dsl[Algebra, Int] {
-          def apply[G[_]](implicit I: Algebra[G]): G[Int] = I.int(i)
-        }
-
-        def add(l: _root_.diesel.Dsl[Algebra, Int],
-                r: _root_.diesel.Dsl[Algebra, Int]): _root_.diesel.Dsl[Algebra, Int] =
-          new _root_.diesel.Dsl[Algebra, Int] {
-            def apply[G[_]](implicit I: Algebra[G]): G[Int] = I.add(l.apply[G], r.apply[G])
-          }
-
-        def optInt(i: Option[Int]): _root_.diesel.Dsl[Algebra, Option[Int]] =
-          new _root_.diesel.Dsl[Algebra, Option[Int]] {
-            def apply[G[_]](implicit I: Algebra[G]): G[Option[Int]] = I.optInt(i)
-          }
-
+      @diesel
+      trait Maths[G[_]] { self =>
+        import scala.annotation._
+        def int(i: Int): G[Int]
+        def add(l: G[Int], r: G[Int]): G[Int]
+        def optInt(i: Option[Int]): G[Option[Int]]
+        def wrappedInt(i: Int): G[Int] = self.int(i)
         protected[diesel] def mixedInts[H[_]](i: Int,
                                               optInt: Option[Int],
-                                              gInt: _root_.diesel.Dsl[Algebra, Int],
-                                              hInt: H[Int]): _root_.diesel.Dsl[Algebra, Int] =
-          new _root_.diesel.Dsl[Algebra, Int] {
-            def apply[G[_]](implicit I: Algebra[G]): G[Int] =
-              I.mixedInts(i, optInt, gInt.apply[G], hInt)
-          }
-
-        def wrappedInt(i: Int): _root_.diesel.Dsl[Algebra, Int] =
-          new _root_.diesel.Dsl[Algebra, Int] {
-            def apply[G[_]](implicit I: Algebra[G]): G[Int] = I.wrappedInt(i)
-          }
+                                              gInt: G[Int],
+                                              hInt: H[Int]): G[Int]
       }
 
       val interpreter = new Maths.Algebra[Id] {
