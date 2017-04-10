@@ -48,7 +48,7 @@ import scala.annotation.compileTimeOnly
   */
 @SuppressWarnings(Array("org.wartremover.warts.DefaultArguments"))
 @compileTimeOnly("Enable macro paradise to expand macro annotations")
-class diesel(algebra: String = diesel.DefaultAlgebraName) extends scala.annotation.StaticAnnotation {
+class diesel(algebra: String = Defaults.AlgebraName) extends scala.annotation.StaticAnnotation {
 
   inline def apply(defn: Any): Any = meta {
     val r = internal.MacroImpl.expand(this, defn)
@@ -58,8 +58,8 @@ class diesel(algebra: String = diesel.DefaultAlgebraName) extends scala.annotati
 
 }
 
-object diesel {
-  val DefaultAlgebraName: String = "Algebra"
+object Defaults {
+  val AlgebraName: String = "Algebra"
 }
 
 /**

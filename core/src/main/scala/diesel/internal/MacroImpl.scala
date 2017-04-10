@@ -13,7 +13,7 @@ object MacroImpl {
     val algebraType: Type.Name = {
       val arg = self match {
         case q"new $_(${Lit(arg: String)})" => arg
-        case _                              => _root_.diesel.diesel.DefaultAlgebraName
+        case _                              => _root_.diesel.Defaults.AlgebraName
       }
       Type.Name(arg)
     }
