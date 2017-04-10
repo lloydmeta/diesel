@@ -24,6 +24,7 @@ object KVSLoggingApp extends App {
     } yield n
   }
 
+  // Another way (note that we don't need an implicit interpreter!) and the program is a value
   type PRG[A[_]] = KVSOps.Algebra[A] with LoggingOps.Algebra[A]
   val program2 = {
     import KVSOps._

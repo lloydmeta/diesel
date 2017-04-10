@@ -35,7 +35,7 @@ add(int(3), int(10))(interpreter) shouldBe 13
 For more in-depth examples, check out:
 
   1. [examples/KVSApp](https://github.com/lloydmeta/diesel/blob/master/examples/src/main/scala/KVSApp.scala): a simple single-DSL program 
-  2. [examples/KVSLoggingApp](https://github.com/lloydmeta/diesel/blob/master/examples/src/main/scala/KVSLogginApp.scala): mixing 2 DSLs in a program
+  2. [examples/KVSLoggingApp](https://github.com/lloydmeta/diesel/blob/master/examples/src/main/scala/KVSLoggingApp.scala): mixing 2 DSLs in a program
 
 ## How it works
 

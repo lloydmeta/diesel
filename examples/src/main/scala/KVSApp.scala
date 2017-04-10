@@ -18,6 +18,7 @@ object KVSApp extends App {
     } yield n
   }
 
+  // Another way (note that we don't need an implicit interpreter!) and the program is a value
   val program2 = {
     import KVSOps._
     import diesel.implicits.monadic._
