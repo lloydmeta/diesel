@@ -66,31 +66,34 @@ object MacroImpl {
     def build(): TaglessFinalTrees = {
       // Extract common variables
       val abstracts = abstractMembers
+      val locals    = localMembers
 
-      ensureSoundMembers(abstracts)
+      ensureSoundMembers(abstracts, locals)
 
       val dslWrappers = generateDslWrappers(abstracts)
       val statements  = q"""
                 import scala.language.higherKinds
 
                 trait $algebraType[$tparam] {
+                  ..$locals
                   ..$abstracts
                 }
         """
       TaglessFinalTrees(statements, dslWrappers)
     }
 
-    private def ensureSoundMembers(abstractMembers: List[Decl]): Unit = {
-      val absMembersSet: Set[Stat] = abstractMembers.toSet
+    private def ensureSoundMembers(abstracts: List[Stat], locals: List[Stat]): Unit = {
+      val absSet    = abstracts.toSet
+      val localsSet = locals.toSet
       // The spaces in multiline strings are significant
       val statsWithErrors = findErrors(
         Seq(
-          ("Please use only package private or protected modifiers.", privateMembersPf),
-          ("Return types must be explicitly stated.", noReturnTypePf),
+          ("Please use only package private or protected modifiers.", privateMembersPf(localsSet)),
+          ("Return types must be explicitly stated.", noReturnTypePf(localsSet)),
           (s"""The return type of this method is not wrapped in $tparamName[_]. Methods like this can be
              |      added to the trait's companion object.""".stripMargin,
-           nonMatchingKindPf(absMembersSet)),
-          ("Vars are not allowed.", varsPf),
+           nonMatchingKindPf(absSet ++ localsSet)),
+          ("Vars are not allowed.", varsPf(localsSet)),
           ("""Currently, only abstract defs and vals are supported inside the body of a trait annotated with @diesel.
              |      If you wish to write concrete members, please add them to a companion object (the trait will
              |      be expanded into the object).""".stripMargin,
@@ -116,7 +119,7 @@ object MacroImpl {
 
       val erroneousStats = statsWithErrors.map(_._1).toSet
       val genUnsupportedStats = templateStatements.filterNot { s =>
-        erroneousStats.contains(s) || absMembersSet.contains(s)
+        erroneousStats.contains(s) || absSet.contains(s) || localsSet.contains(s)
       }
       val genUnsupportedErrs = {
         if (genUnsupportedStats.nonEmpty) {
@@ -154,30 +157,33 @@ object MacroImpl {
       }
     }
 
-    private val privateMembersPf: StatPF = {
-      case d @ Defn.Def(mods, _, _, _, _, _) if mods.exists(isPrivateOrProtected) =>
+    private def privateMembersPf(exempt: Set[Stat]): StatPF = {
+      case d @ Defn.Def(mods, _, _, _, _, _)
+          if mods.exists(isPrivateOrProtected) && !exempt.contains(d) =>
         d
-      case v @ Defn.Val(mods, _, _, _) if mods.exists(isPrivateOrProtected) =>
+      case v @ Defn.Val(mods, _, _, _)
+          if mods.exists(isPrivateOrProtected) && !exempt.contains(v) =>
         v
-      case d @ Decl.Def(mods, _, _, _, _) if mods.exists(isPrivateOrProtected) =>
+      case d @ Decl.Def(mods, _, _, _, _)
+          if mods.exists(isPrivateOrProtected) && !exempt.contains(d) =>
         d
-      case v @ Decl.Val(mods, _, _) if mods.exists(isPrivateOrProtected) =>
-        v
-    }
-    private val noReturnTypePf: StatPF = {
-      case d @ Defn.Def(_, _, _, _, None, _) =>
-        d
-      case v @ Defn.Val(_, _, None, _) =>
+      case v @ Decl.Val(mods, _, _) if mods.exists(isPrivateOrProtected) && !exempt.contains(v) =>
         v
     }
-
-    private def nonMatchingKindPf(absMems: Set[Stat]): StatPF = {
-      case d: Decl.Def if !absMems.contains(d) => d
-      case v: Decl.Val if !absMems.contains(v) => v
+    private def noReturnTypePf(exempt: Set[Stat]): StatPF = {
+      case d @ Defn.Def(_, _, _, _, None, _) if !exempt.contains(d) =>
+        d
+      case v @ Defn.Val(_, _, None, _) if !exempt.contains(v) =>
+        v
     }
 
-    private val varsPf: StatPF = {
-      case v: Defn.Var => v
+    private def nonMatchingKindPf(exempt: Set[Stat]): StatPF = {
+      case d: Decl.Def if !exempt.contains(d) => d
+      case v: Decl.Val if !exempt.contains(v) => v
+    }
+
+    private def varsPf(exempt: Set[Stat]): StatPF = {
+      case v: Defn.Var if !exempt.contains(v) => v
     }
 
     private val concreteMembersPf: StatPF = {
@@ -290,6 +296,41 @@ object MacroImpl {
           buildWrappedVal(mods, pats, declTargs)
       }
     }
+
+    private def isLocal(mod: Mod): Boolean = mod match {
+      case mod"@local" | mod"@diesel.local" => true
+      case _                                => false
+    }
+
+    private def localMembers: List[Stat] =
+      templateStatements.collect {
+        case s @ Decl.Def(mods, _, _, _, _) if mods.exists(isLocal) =>
+          s
+        case s @ Decl.Val(mods, _, _) if mods.exists(isLocal) =>
+          s
+        case s @ Decl.Type(mods, _, _, _) if mods.exists(isLocal) =>
+          s
+        case s @ Decl.Var(mods, _, _) if mods.exists(isLocal) =>
+          s
+
+        case s @ Defn.Def(mods, _, _, _, _, _) if mods.exists(isLocal) =>
+          s
+        case s @ Defn.Val(mods, _, _, _) if mods.exists(isLocal) =>
+          s
+        case s @ Defn.Type(mods, _, _, _) if mods.exists(isLocal) =>
+          s
+        case s @ Defn.Var(mods, _, _, _) if mods.exists(isLocal) =>
+          s
+        case s @ Defn.Macro(mods, _, _, _, _, _) if mods.exists(isLocal) =>
+          s
+        case s @ Defn.Trait(mods, _, _, _, _) if mods.exists(isLocal) =>
+          s
+        case s @ Defn.Class(mods, _, _, _, _) if mods.exists(isLocal) =>
+          s
+        case s @ Defn.Object(mods, _, _) if mods.exists(isLocal) =>
+          s
+        case s @ q"..$mods def this(...$paramss) = $expr" if mods.exists(isLocal) => s
+      }.toList
 
   }
 
