@@ -103,7 +103,7 @@ object MacroImpl {
              |      added to the trait's companion object.""".stripMargin,
            nonMatchingKindPf(dslMembersSet ++ localsSet)),
           ("Vars are not allowed.", varsPf(localsSet)),
-          (s"""This following method has a type parameter that shadows the $tparamName[_] used to annotate the trait.
+          (s"""This method has a type parameter that shadows the $tparamName[_] used to annotate the trait.
              |      Besides being confusing for readers of your code, this is not currently supported by diesel.""".stripMargin,
            methodsShadowingTParamPF)
         )
