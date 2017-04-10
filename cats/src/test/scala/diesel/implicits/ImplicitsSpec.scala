@@ -13,7 +13,7 @@ import scala.language.higherKinds
   */
 class ImplicitsSpec extends FunSpec with Matchers {
 
-  describe("composing as monads") {
+  describe("composing languages using the implicits") {
 
     @diesel
     trait Maths[G[_]] {
@@ -27,7 +27,7 @@ class ImplicitsSpec extends FunSpec with Matchers {
       def pure[A](a: A): F[A]
     }
 
-    // Our combind algebra type
+    // Our combined algebra type
     type PRG[A[_]] = Applicative.Algebra[A] with Maths.Algebra[A]
 
     import Maths._
