@@ -22,42 +22,74 @@ class ImplicitsSpec extends FunSpec with Matchers {
     }
 
     @diesel
-    trait ApplicativeInterpreter[F[_]] {
+    trait Applicative[F[_]] {
       def map2[A, B, C](fa: F[A], fb: F[B])(f: (A, B) => C): F[C]
       def pure[A](a: A): F[A]
     }
 
-    def op(a: Int, b: Int, c: Int) = {
-      import Maths._
-      import ApplicativeInterpreter._
-      add(int(a), int(b))
-        .filter(_ > 3)
-        .flatMap(i => add(int(i), int(c)).flatMap(y => add(int(y), int(y))))
+    // Our combind algebra type
+    type PRG[A[_]] = Applicative.Algebra[A] with Maths.Algebra[A]
+
+    import Maths._
+    import Applicative._
+    def monadicPlusOp(a: Int, b: Int, c: Int) = {
+      import monadicplus._
+      for {
+        i <- add(int(a), int(b)).withAlg[PRG]
+        if i > 3
+        j <- pure(c).withAlg[PRG]
+        k <- add(int(i), int(j)).withAlg[PRG]
+      } yield k
     }
 
-    describe("evaluating using the environment") {
+    def monadicOp(a: Int, b: Int, c: Int) = {
+      import monadic._
+      for {
+        i <- add(int(a), int(b)).withAlg[PRG]
+        j <- pure(c).withAlg[PRG]
+        k <- add(int(i), int(j)).withAlg[PRG]
+      } yield k
+    }
+
+    implicit def interp[F[_]](implicit F: Monad[F]) =
+      new Applicative.Algebra[F] with Maths.Algebra[F] {
+        import cats.implicits._
+        def int(i: Int) = F.pure(i)
+        def add(l: F[Int], r: F[Int]) =
+          for {
+            x <- l
+            y <- r
+          } yield x + y
+
+        def map2[A, B, C](fa: F[A], fb: F[B])(f: (A, B) => C): F[C] =
+          F.map2(fa, fb)(f)
+        def pure[A](a: A): F[A] = F.pure(a)
+      }
+
+    describe("using monadic") {
 
       import cats.implicits._
 
-      implicit def interp[F[_]](implicit F: Monad[F]) =
-        new Maths.Algebra[F] with ApplicativeInterpreter.Algebra[F] {
-          import cats.implicits._
-          def int(i: Int) = F.pure(i)
-          def add(l: F[Int], r: F[Int]) =
-            for {
-              x <- l
-              y <- r
-            } yield x + y
+      it("should work") {
+        val program1 = monadicOp(1, 2, 3)
+        val program2 = monadicOp(3, 4, 5)
+        program1[Option] shouldBe Some(6)
+        program1[List] shouldBe List(6)
+        program2[Option] shouldBe Some(12)
+        program2[List] shouldBe List(12)
+      }
+    }
+    describe("using monadicplus") {
 
-          def map2[A, B, C](fa: F[A], fb: F[B])(f: (A, B) => C): F[C] =
-            F.map2(fa, fb)(f)
-          def pure[A](a: A): F[A] = F.pure(a)
-        }
+      import cats.implicits._
 
       it("should work") {
-        val program1 = op(1, 2, 3)
-        val program2 = op(3, 4, 5)
+        val program1 = monadicPlusOp(1, 2, 3)
+        val program2 = monadicPlusOp(3, 4, 5)
         program1[Option] shouldBe None
+        program1[List] shouldBe Nil
+        program2[Option] shouldBe Some(12)
+        program2[List] shouldBe List(12)
       }
     }
 
