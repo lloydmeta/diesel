@@ -52,11 +52,21 @@ lazy val scalaz = project
   )
   .dependsOn(core)
 
+lazy val examples = project
+  .settings(
+    name := "diesel-examples",
+    commonSettings,
+    metaMacroSettings,
+    publishArtifact := false,
+    publishLocal := {}
+  )
+  .dependsOn(cats)
+
 lazy val commonSettings: Seq[Def.Setting[_]] = Seq(
   organization := "com.beachape",
   version := theVersion,
   scalaVersion := theScalaVersion,
-  scalacOptions ++= Seq(
+  scalacOptions in (Compile, compile) ++= Seq(
     "-deprecation",
     "-encoding",
     "UTF-8",
@@ -65,13 +75,14 @@ lazy val commonSettings: Seq[Def.Setting[_]] = Seq(
     "-language:higherKinds",
     "-language:implicitConversions",
     "-unchecked",
-    // "-Xfatal-warnings",
-    // "-Xlint",
+    "-Xfatal-warnings",
+    "-Xlint",
     "-Yno-adapted-args",
     "-Ywarn-dead-code",
     "-Ywarn-numeric-widen",
     "-Ywarn-value-discard",
-    "-Xfuture"
+    "-Xfuture",
+    "-Ywarn-unused-import"
   ),
   wartremoverErrors in (Compile, compile) ++= Warts.unsafe,
   doctestWithDependencies := false
@@ -98,25 +109,6 @@ lazy val metaMacroSettings: Seq[Def.Setting[_]] = Seq(
   scalacOptions in (Compile, console) := Seq(), // macroparadise plugin doesn't work in repl yet.
   // temporary workaround for https://github.com/scalameta/paradise/issues/55
   sources in (Compile, doc) := Nil // macroparadise doesn't work with scaladoc yet.
-)
-
-scalacOptions ++= Seq(
-  "-deprecation",
-  "-encoding",
-  "UTF-8",
-  "-feature",
-  "-language:existentials",
-  "-language:higherKinds",
-  "-language:implicitConversions",
-  "-unchecked",
-  "-Xfatal-warnings",
-  "-Xlint",
-  "-Yno-adapted-args",
-  "-Ywarn-dead-code",
-  "-Ywarn-numeric-widen",
-  "-Ywarn-value-discard",
-  "-Xfuture",
-  "-Ywarn-unused-import"
 )
 
 // Settings for publishing to Maven Central

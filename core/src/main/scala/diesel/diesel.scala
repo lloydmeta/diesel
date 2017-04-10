@@ -1,7 +1,6 @@
 package diesel
 
 import scala.annotation.compileTimeOnly
-import scala.meta._
 
 /**
   * Annotation used for expanding a trait parameterised with a type that takes
