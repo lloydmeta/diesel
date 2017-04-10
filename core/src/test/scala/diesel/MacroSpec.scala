@@ -18,6 +18,7 @@ class MacroSpec extends FunSpec with Matchers {
 
       @diesel
       trait Maths[G[_]] {
+        import scala.annotation._
         def int(i: Int): G[Int]
         def add(l: G[Int], r: G[Int]): G[Int]
         def optInt(i: Option[Int]): G[Option[Int]]

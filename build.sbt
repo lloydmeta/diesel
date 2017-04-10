@@ -77,10 +77,6 @@ lazy val commonSettings: Seq[Def.Setting[_]] = Seq(
   doctestWithDependencies := false
 )
 
-libraryDependencies ++= Seq(
-  "org.scalatest" %% "scalatest" % "3.2.0-SNAP4" % Test
-)
-
 lazy val commonDependencies = Seq(
   "org.scalameta" %% "scalameta" % "1.6.0",
   "org.scalatest" %% "scalatest" % "3.2.0-SNAP4" % Test,

@@ -69,14 +69,16 @@ object MacroImpl {
       val abstracts = abstractMembers
       val locals    = localMembers
       val concretes = concreteMembers
+      val imports   = importStats
 
-      ensureSoundMembers(abstracts ++ concretes, locals)
+      ensureSoundMembers(abstracts ++ concretes, locals, imports)
 
       val dslWrappers = generateDslWrappers(abstracts, concretes)
       val statements  = q"""
                 import scala.language.higherKinds
 
                 trait $algebraType[$tparam] {
+                  ..$imports
                   ..$locals
                   ..$abstracts
                   ..$concretes
@@ -85,7 +87,9 @@ object MacroImpl {
       TaglessFinalTrees(statements, dslWrappers)
     }
 
-    private def ensureSoundMembers(dslMembers: List[Stat], locals: List[Stat]): Unit = {
+    private def ensureSoundMembers(dslMembers: List[Stat],
+                                   locals: List[Stat],
+                                   imports: List[Import]): Unit = {
       val dslMembersSet = dslMembers.toSet
       val localsSet     = locals.toSet
       // The spaces in multiline strings are significant
@@ -118,7 +122,8 @@ object MacroImpl {
 
       val erroneousStats = statsWithErrors.map(_._1).toSet
       val genUnsupportedStats = templateStatements.filterNot { s =>
-        erroneousStats.contains(s) || dslMembersSet.contains(s) || localsSet.contains(s)
+        erroneousStats.contains(s) || dslMembersSet.contains(s) || localsSet.contains(s) || imports
+          .contains(s)
       }
       val genUnsupportedErrs = {
         if (genUnsupportedStats.nonEmpty) {
@@ -327,6 +332,11 @@ object MacroImpl {
           buildWrappedVal(mods, Seq(patName), declTargs)
       }
     }
+
+    private def importStats: List[Import] =
+      templateStatements.collect {
+        case i: Import => i
+      }.toList
 
     private def isLocal(mod: Mod): Boolean = mod match {
       case mod"@local" | mod"@diesel.local" => true
