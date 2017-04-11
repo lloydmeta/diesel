@@ -37,27 +37,26 @@ class ImplicitsSpec extends FunSpec with Matchers {
 
     import Maths._
     import Applicative._
-    import scalaz.Scalaz._
 
-    // Our combined algebra type
-    type PRG[A[_]] = Applicative.Algebra[A] with Maths.Algebra[A] with Logging.Algebra[A]
-
+    // Our combined applicative and maths algebra type
+    type ApMaths[A[_]] = Applicative.Algebra[A] with Maths.Algebra[A]
     val monadicPlusOp = { (a: Int, b: Int, c: Int) =>
       import monadicplus._
       for {
-        i <- add(int(a), int(b)).withAlg[PRG]
+        i <- add(int(a), int(b)).withAlg[ApMaths]
         if i > 3
-        j <- pure(c).withAlg[PRG]
-        _ <- Logging.info(j.toString).withAlg[PRG]
-        k <- add(int(i), int(j)).withAlg[PRG]
+        j <- pure(c).withAlg[ApMaths]
+        k <- add(int(i), int(j)).withAlg[ApMaths]
       } yield k
     }
 
     // Composing a composed DSL...
+    // Our combined applicative and maths *and* logging algebras
+    type PRG[A[_]] = ApMaths[A] with Logging.Algebra[A]
     val monadicPlusOpWithWarn = { (a: Int, b: Int, c: Int) =>
       import monadicplus._
       for {
-        v <- monadicPlusOp(a, b, c)
+        v <- monadicPlusOp(a, b, c).withAlg[PRG]
         _ <- Logging.warn(v.toString).withAlg[PRG]
       } yield v
     }
@@ -72,6 +71,7 @@ class ImplicitsSpec extends FunSpec with Matchers {
       } yield k
     }
 
+    import scalaz.Scalaz._
     implicit def interp[F[_]](implicit F: Monad[F]) =
       new Applicative.Algebra[F] with Maths.Algebra[F] with Logging.Algebra[F] {
         def int(i: Int) = F.pure(i)
