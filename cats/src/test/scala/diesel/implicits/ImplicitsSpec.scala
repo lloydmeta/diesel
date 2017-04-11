@@ -22,8 +22,17 @@ class ImplicitsSpec extends FunSpec with Matchers {
       def pure[A](a: A): F[A]
     }
 
+    @diesel
+    trait Logging[F[_]] {
+
+      def info(s: String): F[Unit]
+      def warn(s: String): F[Unit]
+      def error(s: String): F[Unit]
+
+    }
+
     // Our combined algebra type
-    type PRG[A[_]] = Applicative.Algebra[A] with Maths.Algebra[A]
+    type PRG[A[_]] = Applicative.Algebra[A] with Maths.Algebra[A] with Logging.Algebra[A]
 
     import Maths._
     import Applicative._
@@ -35,6 +44,7 @@ class ImplicitsSpec extends FunSpec with Matchers {
         i <- add(int(a), int(b)).withAlg[PRG]
         if i > 3
         j <- pure(c).withAlg[PRG]
+        _ <- Logging.info(j.toString).withAlg[PRG]
         k <- add(int(i), int(j)).withAlg[PRG]
       } yield k
     }
@@ -44,12 +54,13 @@ class ImplicitsSpec extends FunSpec with Matchers {
       for {
         i <- add(int(a), int(b)).withAlg[PRG]
         j <- pure(c).withAlg[PRG]
+        _ <- Logging.info(j.toString).withAlg[PRG]
         k <- add(int(i), int(j)).withAlg[PRG]
       } yield k
     }
 
     implicit def interp[F[_]](implicit F: Monad[F]) =
-      new Applicative.Algebra[F] with Maths.Algebra[F] {
+      new Applicative.Algebra[F] with Maths.Algebra[F] with Logging.Algebra[F] {
         def int(i: Int) = F.pure(i)
         def add(l: F[Int], r: F[Int]) =
           for {
@@ -60,6 +71,9 @@ class ImplicitsSpec extends FunSpec with Matchers {
         def map2[A, B, C](fa: F[A], fb: F[B])(f: (A, B) => C): F[C] =
           F.map2(fa, fb)(f)
         def pure[A](a: A): F[A] = F.pure(a)
+        def info(s: String)     = F.pure(println(s"INFO: $s"))
+        def warn(s: String)     = F.pure(println(s"WARN: $s"))
+        def error(s: String)    = F.pure(println(s"ERROR: $s"))
       }
 
     describe("using monadic") {
