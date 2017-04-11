@@ -53,6 +53,15 @@ class ImplicitsSpec extends FunSpec with Matchers {
       } yield k
     }
 
+    // Composing a composed DSL...
+    val monadicPlusOpWithWarn = { (a: Int, b: Int, c: Int) =>
+      import monadicplus._
+      for {
+        v <- monadicPlusOp(a, b, c)
+        _ <- Logging.warn(v.toString).withAlg[PRG]
+      } yield v
+    }
+
     val monadicOp = { (a: Int, b: Int, c: Int) =>
       import monadic._
       for {
@@ -97,10 +106,13 @@ class ImplicitsSpec extends FunSpec with Matchers {
       it("should work") {
         val program1 = monadicPlusOp(1, 2, 3)
         val program2 = monadicPlusOp(3, 4, 5)
+        val program3 = monadicPlusOpWithWarn(3, 4, 5)
         program1[Option] shouldBe None
         program1[List] shouldBe Nil
         program2[Option] shouldBe Some(12)
         program2[List] shouldBe List(12)
+        program3[Option] shouldBe Some(12)
+        program3[List] shouldBe List(12)
       }
     }
 
