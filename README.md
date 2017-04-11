@@ -12,11 +12,11 @@ holding a Tagless Final Algebra and DSL wrapper methods.
 Example:
 
 ```scala
-// Declare your DSL
 import cats._, implicits._
 import diesel.diesel
 object DieselDemo extends App {
 
+// Declare your DSL
   @diesel
   trait Maths[F[_]] {
     def int(i: Int): F[Int]
@@ -37,6 +37,7 @@ object DieselDemo extends App {
     } yield r
   }
 
+  // Write an interpreter
   implicit val interp = new Maths.Algebra[Id] with Logging.Algebra[Id] {
     def int(a: Int)                 = a
     def add(a: Id[Int], b: Id[Int]) = a + b

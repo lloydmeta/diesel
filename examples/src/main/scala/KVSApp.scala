@@ -9,8 +9,7 @@ object KVSApp extends App {
   import cats.implicits._
 
   // This is one way to compose a program
-  def program1[F[_]: Monad: KVSOps.Algebra] = {
-    import KVSOps._
+  def program1[F[_]: Monad: KVStore.Algebra] = {
     for {
       _ <- put("wild-cats", 2)[F]
       _ <- update[Int, Int]("wild-cats", _ + 12)[F]
@@ -22,7 +21,6 @@ object KVSApp extends App {
 
   // Another way (note that we don't need an implicit interpreter!) and the program is a value
   val program2 = {
-    import KVSOps._
     import diesel.implicits.monadic._
     for {
       _ <- put("wild-cats", 90)
@@ -32,6 +30,8 @@ object KVSApp extends App {
       _ <- delete("tame-cats")
     } yield n
   }
+
+  implicit object PureKVSInterp extends KVSStateInterpreter
 
   val r1 = program1[KVStoreState].run(Map.empty).value
   println(s"Result 1: $r1")
