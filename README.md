@@ -13,29 +13,49 @@ Example:
 
 ```scala
 // Declare your DSL
-@diesel
-trait Maths[F[_]] {
-  def int(i: Int): F[Int]
-  def add(l: F[Int], r: F[Int]): F[Int]
-}
+import cats._, implicits._
+import diesel.diesel
+object DieselDemo extends App {
 
-// Write your interpreter
-type Id[A] = A
-val interpreter = new Maths.Algebra[Id] {
-  def int(i: Int) = i
-  def add(l: Id[Int], r: Id[Int]) = l + r
-}
+  @diesel
+  trait Maths[F[_]] {
+    def int(i: Int): F[Int]
+    def add(l: F[Int], r: F[Int]): F[Int]
+  }
 
-// Use your stuff.
-import Maths._
-int(3)(interpreter) shouldBe 3
-add(int(3), int(10))(interpreter) shouldBe 13
+  @diesel
+  trait Logging[F[_]] {
+    def info(s: String): F[Unit]
+  }
+
+  // Use the auto-generated wrapper methods when composing 2+ DSLs using Monad[F] 
+  import Maths._, Logging._
+  def addAndLog[F[_]: Monad: Maths.Algebra: Logging.Algebra](x: Int, y: Int): F[Int] = {
+    for {
+      r <- add(int(x), int(y))[F]
+      _ <- info(s"result $r")[F]
+    } yield r
+  }
+
+  implicit val interp = new Maths.Algebra[Id] with Logging.Algebra[Id] {
+    def int(a: Int)                 = a
+    def add(a: Id[Int], b: Id[Int]) = a + b
+    def info(msg: String)           = println(msg)
+  }
+
+  val _ = addAndLog[Id](1, 2)
+
+}
+/*
+[info] Running DieselDemo 
+result 3
+*/
 ```
 
 For more in-depth examples, check out:
 
   1. [examples/KVSApp](https://github.com/lloydmeta/diesel/blob/master/examples/src/main/scala/KVSApp.scala): a simple single-DSL program 
-  2. [examples/KVSLoggingApp](https://github.com/lloydmeta/diesel/blob/master/examples/src/main/scala/KVSLoggingApp.scala): mixing 2 DSLs in a program
+  2. [examples/KVSLoggingApp](https://github.com/lloydmeta/diesel/blob/master/examples/src/main/scala/KVSLoggingApp.scala): mixing 3 DSLs in a program
 
 ## How it works
 
