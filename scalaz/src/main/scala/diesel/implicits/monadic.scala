@@ -1,10 +1,9 @@
 package diesel.implicits
 
-import cats.Monad
+import scalaz.Monad
 import diesel.Dsl
 
 import scala.language.higherKinds
-import scala.language.implicitConversions
 
 /**
   * Implicitly converts DSLs to MonadicDSl so that you can use them in for-comprehensions.
@@ -34,8 +33,8 @@ import scala.language.implicitConversions
   * scala> import Wrapper._
   * scala> import Maths._
   * scala> import Applicative._
-  * scala> import cats.Monad
-  * scala> import cats.implicits._
+  * scala> import scalaz.Monad
+  * scala> import scalaz.Scalaz._
   *
   * // Our combined algebra type and our program that uses it
   * scala> type PRG[A[_]] = Applicative.Algebra[A] with Maths.Algebra[A]
@@ -57,7 +56,7 @@ import scala.language.implicitConversions
   *      |        x <- l
   *      |        y <- r
   *      |      } yield x + y
-  *      |    def map2[A, B, C](fa: F[A], fb: F[B])(f: (A, B) => C): F[C] = F.map2(fa, fb)(f)
+  *      |    def map2[A, B, C](fa: F[A], fb: F[B])(f: (A, B) => C): F[C] = F.apply2(fa, fb)(f)
   *      |    def pure[A](a: A): F[A] = F.pure(a)
   *      | }
   *
@@ -72,20 +71,16 @@ object monadic extends monadic
 
 trait monadic {
 
-  implicit def toMonadicDsl[Alg[_[_]], A](dsl: Dsl[Alg, A]): MonadicDsl[Alg, A] =
-    new MonadicDsl[Alg, A] {
-      def apply[F[_]: Monad](implicit interpreter: Alg[F]): F[A] = dsl.apply(interpreter)
-    }
+  implicit class DslToMonadicDsl[Alg[_[_]], A](dsl: Dsl[Alg, A]) extends MonadicDsl[Alg, A] {
+    def apply[F[_]: Monad](implicit interpreter: Alg[F]): F[A] = dsl.apply(interpreter)
+  }
 
 }
 
 trait MonadicDsl[Alg[_[_]], A] { self =>
 
-  import cats.implicits._
+  import scalaz.Scalaz._
 
-  /**
-    * Evaluate this Dsl to a F[A]
-    */
   def apply[F[_]: Monad](implicit interpreter: Alg[F]): F[A]
 
   def map[B](f: A => B): MonadicDsl[Alg, B] = new MonadicDsl[Alg, B] {
@@ -113,5 +108,10 @@ trait MonadicDsl[Alg[_[_]], A] { self =>
         self[F].flatMap(r => f(r)[F])
       }
     }
+
+  /**
+    * Converts to a MonadicPlusDsl so that you can do filtering
+    */
+  def toPlus: MonadicPlusDsl[Alg, A] = new MonadicDslToMonadicPlusDsl(self)
 
 }

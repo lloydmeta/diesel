@@ -71,6 +71,15 @@ class ImplicitsSpec extends FunSpec with Matchers {
       } yield k
     }
 
+    val monadicToMonadicPlusOp = { (a: Int, b: Int, c: Int) =>
+      import monadicplus._
+      for {
+        i <- monadicOp(a, b, c).toPlus
+        if i > 0
+        _ <- Logging.info(i.toString).withAlg[PRG]
+      } yield i
+    }
+
     import scalaz.Scalaz._
     implicit def interp[F[_]](implicit F: Monad[F]) =
       new Applicative.Algebra[F] with Maths.Algebra[F] with Logging.Algebra[F] {
@@ -113,6 +122,17 @@ class ImplicitsSpec extends FunSpec with Matchers {
         program2[List] shouldBe List(12)
         program3[Option] shouldBe Some(12)
         program3[List] shouldBe List(12)
+      }
+    }
+
+    describe("converting from monadic to monadicplus") {
+      it("should work") {
+        val program1 = monadicToMonadicPlusOp(1, 2, 3)
+        val program2 = monadicToMonadicPlusOp(3, 4, 5)
+        program1[Option] shouldBe Some(6)
+        program1[List] shouldBe List(6)
+        program2[Option] shouldBe Some(12)
+        program2[List] shouldBe List(12)
       }
     }
 
