@@ -21,12 +21,17 @@ object MacroImpl {
       // No companion object
       case q"..$mods trait $tname[..$tparams] extends $template" => {
         val TaglessFinalTrees(statements, dslWrappers) = buildTrees(algebraType, tparams, template)
-        q"""..$mods object ${Term.Name(tname.value)} {
+        Term.Block(
+          Seq(
+            q"..$mods trait $tname",
+            q"""..$mods object ${Term.Name(tname.value)} {
              ..${statements.stats}
              ..$dslWrappers
 
            }
           """
+          ))
+
       }
       // There is a companion object
       case Term.Block(
@@ -39,7 +44,7 @@ object MacroImpl {
         val templateStats: Seq[Stat] =
           statements.stats ++ dslWrappers ++ companion.templ.stats.getOrElse(Nil)
         val newTemplate = companion.templ.copy(stats = Some(templateStats))
-        Term.Block(Seq(companion.copy(templ = newTemplate)))
+        Term.Block(Seq(q"..$mods trait $tname", companion.copy(templ = newTemplate)))
       }
       case _ => abort("Sorry, we only work on traits")
     }
@@ -197,8 +202,8 @@ object MacroImpl {
       }.toList
 
     private def isLocal(mod: Mod): Boolean = mod match {
-      case mod"@local" | mod"@diesel.local" => true
-      case _                                => false
+      case mod"@local" | mod"@local()" | mod"@diesel.local" | mod"@diesel.local()" => true
+      case _                                                                       => false
     }
 
     private def localMembers: List[(Stat, Int)] =
