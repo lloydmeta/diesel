@@ -113,4 +113,9 @@ trait MonadicDsl[Alg[_[_]], A] { self =>
       }
     }
 
+  /**
+    * Converts to a MonadicPlusDsl so that you can do filtering
+    */
+  def toPlus: MonadicPlusDsl[Alg, A] = new MonadicDslToMonadicPlusDsl(self)
+
 }
