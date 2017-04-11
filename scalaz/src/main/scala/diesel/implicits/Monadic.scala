@@ -72,8 +72,7 @@ object monadic extends monadic
 
 trait monadic {
 
-  implicit def toMonadicDsl[Alg[_[_]], A](dsl: Dsl[Alg, A]): MonadicDsl[Alg, A] =
-    new MonadicDsl[Alg, A] {
+  implicit class DslToMonadicDsl[Alg[_[_]], A](dsl: Dsl[Alg, A]) extends  MonadicDsl[Alg, A] {
       def apply[F[_]: Monad](implicit interpreter: Alg[F]): F[A] = dsl.apply(interpreter)
     }
 

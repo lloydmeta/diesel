@@ -15,6 +15,7 @@ import scala.language.higherKinds
   *
   * {{{
   * scala> import _root_.diesel._
+  * scala> import scala.language.higherKinds
   *
   * // Wrapper is only for the sake of sbt-doctest and is unnecessary in real-life usage
   * scala> object Wrapper {
@@ -77,10 +78,14 @@ object monadicplus extends monadicplus
 
 trait monadicplus {
 
-  implicit def dslToMonadicFilterDsl[Alg[_[_]], A](dsl: Dsl[Alg, A]): MonadPlusDsl[Alg, A] =
-    new MonadPlusDsl[Alg, A] {
-      def apply[F[_]: MonadFilter](implicit interpreter: Alg[F]): F[A] = dsl[F]
-    }
+  implicit class DslToMonadPlusDsl[Alg[_[_]], A](dsl: Dsl[Alg, A]) extends MonadPlusDsl[Alg, A] {
+    def apply[F[_]: MonadFilter](implicit interpreter: Alg[F]): F[A] = dsl[F]
+  }
+
+  implicit class MonadicDslToMonadPlusDsl[Alg[_[_]], A](dsl: MonadicDsl[Alg, A])
+      extends MonadPlusDsl[Alg, A] {
+    def apply[F[_]: MonadFilter](implicit interpreter: Alg[F]): F[A] = dsl[F]
+  }
 
 }
 

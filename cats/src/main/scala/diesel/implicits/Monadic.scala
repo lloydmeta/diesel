@@ -4,7 +4,6 @@ import cats.Monad
 import diesel.Dsl
 
 import scala.language.higherKinds
-import scala.language.implicitConversions
 
 /**
   * Implicitly converts DSLs to MonadicDSl so that you can use them in for-comprehensions.
@@ -15,6 +14,7 @@ import scala.language.implicitConversions
   *
   * {{{
   * scala> import _root_.diesel._
+  * scala> import scala.language.higherKinds
   *
   * // Wrapper is only for the sake of sbt-doctest and is unnecessary in real-life usage
   * scala> object Wrapper {
@@ -72,10 +72,9 @@ object monadic extends monadic
 
 trait monadic {
 
-  implicit def toMonadicDsl[Alg[_[_]], A](dsl: Dsl[Alg, A]): MonadicDsl[Alg, A] =
-    new MonadicDsl[Alg, A] {
-      def apply[F[_]: Monad](implicit interpreter: Alg[F]): F[A] = dsl.apply(interpreter)
-    }
+  implicit class DslToMonadicDsl[Alg[_[_]], A](dsl: Dsl[Alg, A]) extends MonadicDsl[Alg, A] {
+    def apply[F[_]: Monad](implicit interpreter: Alg[F]): F[A] = dsl.apply(interpreter)
+  }
 
 }
 

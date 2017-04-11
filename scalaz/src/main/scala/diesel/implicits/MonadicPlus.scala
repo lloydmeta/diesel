@@ -77,8 +77,11 @@ object monadicplus extends monadicplus
 
 trait monadicplus {
 
-  implicit def dslToMonadicFilterDsl[Alg[_[_]], A](dsl: Dsl[Alg, A]): MonadPlusDsl[Alg, A] =
-    new MonadPlusDsl[Alg, A] {
+  implicit class DslToMonadicFilterDsl[Alg[_[_]], A](dsl: Dsl[Alg, A]) extends MonadPlusDsl[Alg, A] {
+      def apply[F[_]: MonadPlus](implicit interpreter: Alg[F]): F[A] = dsl[F]
+    }
+
+  implicit class MonadicDslToMonadicFilterDsl[Alg[_[_]], A](dsl: MonadicDsl[Alg, A]) extends MonadPlusDsl[Alg, A] {
       def apply[F[_]: MonadPlus](implicit interpreter: Alg[F]): F[A] = dsl[F]
     }
 
