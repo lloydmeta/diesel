@@ -3,6 +3,7 @@ package diesel.internal
 import scala.meta._
 import scala.collection.immutable._
 import scala.meta.Type.Param
+import _root_.diesel.Defaults
 
 object MacroImpl {
 
@@ -13,7 +14,7 @@ object MacroImpl {
     val algebraType: Type.Name = {
       val arg = self match {
         case q"new $_(${Lit(arg: String)})" => arg
-        case _                              => _root_.diesel.Defaults.AlgebraName
+        case _                              => Defaults.AlgebraName
       }
       Type.Name(arg)
     }
@@ -23,7 +24,8 @@ object MacroImpl {
         val TaglessFinalTrees(statements, dslWrappers) = buildTrees(algebraType, tparams, template)
         Term.Block(
           Seq(
-            q"..$mods trait $tname",
+            // Emitted empty private trait for IntelliJ
+            q"private sealed trait $tname",
             q"""..$mods object ${Term.Name(tname.value)} {
              ..${statements.stats}
              ..$dslWrappers
@@ -44,7 +46,13 @@ object MacroImpl {
         val templateStats: Seq[Stat] =
           statements.stats ++ dslWrappers ++ companion.templ.stats.getOrElse(Nil)
         val newTemplate = companion.templ.copy(stats = Some(templateStats))
-        Term.Block(Seq(q"..$mods trait $tname", companion.copy(templ = newTemplate)))
+        Term.Block(
+          Seq(
+            // Emitted empty private trait for IntelliJ
+            q"private sealed trait $tname",
+            companion.copy(templ = newTemplate)
+          )
+        )
       }
       case _ => abort("Sorry, we only work on traits")
     }
