@@ -7,8 +7,9 @@ import _root_.diesel.Defaults
 
 object MacroImpl {
 
-  private val DslType = t"_root_.diesel.Dsl"
-  private val DslCtor = ctor"_root_.diesel.Dsl"
+  private val DslImport = q"import _root_.diesel.Dsl"
+  private val DslType   = t"Dsl"
+  private val DslCtor   = ctor"Dsl"
 
   def expand(self: Tree, defn: Tree): Stat = {
     val opsName: Term.Name = {
@@ -118,6 +119,7 @@ object MacroImpl {
       val dslWrappers = generateDslWrappers(abstracts, concretes)
       val opsWrapper =
         q"""object $opsObjectName {
+            $DslImport
            ..$dslWrappers
            }"""
       TaglessFinalTrees(traitTemplate, opsWrapper)
