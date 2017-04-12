@@ -5,11 +5,11 @@ import scala.language.higherKinds
 @SuppressWarnings(Array("org.wartremover.warts.Any"))
 object KVSApp extends App {
 
-  import KVStore._
+  import KVStore._, Ops._
   import cats.implicits._
 
   // This is one way to compose a program
-  def program1[F[_]: Monad: KVStore.Algebra] = {
+  def program1[F[_]: Monad: KVStore] = {
     for {
       _ <- put("wild-cats", 2)[F]
       _ <- update[Int, Int]("wild-cats", _ + 12)[F]

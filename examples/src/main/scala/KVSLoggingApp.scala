@@ -5,9 +5,9 @@ import scala.language.higherKinds
 @SuppressWarnings(Array("org.wartremover.warts.Any"))
 object KVSLoggingApp extends App {
 
-  import Maths._
-  import Logger.info
-  import KVStore._
+  import Maths.Ops._
+  import Logger.Ops._
+  import KVStore.Ops._, KVStore.KVStoreState
   import cats.implicits._
 
   /**
@@ -15,7 +15,7 @@ object KVSLoggingApp extends App {
     *
     * Here we have Logging and KVStore algebras mixed together and using a for-comprehension!
     */
-  def program1[F[_]: Monad: KVStore.Algebra: Logger.Algebra] = {
+  def program1[F[_]: Monad: KVStore: Logger] = {
     for {
       _ <- put("wild-cats", 2)[F]
       _ <- update[Int, Int]("wild-cats", _ + 12)[F]
@@ -29,7 +29,7 @@ object KVSLoggingApp extends App {
   /**
     * Here we compose another DSL (MathOps) into our original composed program1
     */
-  def program2[F[_]: Monad: KVStore.Algebra: Logger.Algebra: Maths.Algebra] = {
+  def program2[F[_]: Monad: KVStore: Logger: Maths] = {
     for {
       maybeX <- program1[F]
       x = maybeX.getOrElse(1)
@@ -41,7 +41,7 @@ object KVSLoggingApp extends App {
   }
 
   // Another way (note that we don't need an implicit interpreter!) and the program is a value
-  type PRG[A[_]] = KVStore.Algebra[A] with Logger.Algebra[A]
+  type PRG[A[_]] = KVStore[A] with Logger[A]
   val program3 = {
     import diesel.implicits.monadic._
     for {

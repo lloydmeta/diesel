@@ -13,14 +13,14 @@ trait Logger[F[_]] {
 @SuppressWarnings(Array("org.wartremover.warts.Any"))
 object Logger {
 
-  implicit def loggingInterp[F[_]: Monad] = new Algebra[F] {
+  implicit def loggingInterp[F[_]: Monad] = new Logger[F] {
     private val m        = implicitly[Monad[F]]
     def info(s: String)  = m.pure(println(s"INFO: $s"))
     def warn(s: String)  = m.pure(println(s"WARN: $s"))
     def error(s: String) = m.pure(println(s"ERROR: $s"))
   }
 
-  trait KVSStateInterpreter extends Algebra[KVStoreState] {
+  trait KVSStateInterpreter extends Logger[KVStoreState] {
     private val m        = implicitly[Monad[KVStoreState]]
     def info(s: String)  = m.pure(println(s"INFO: $s"))
     def warn(s: String)  = m.pure(println(s"WARN: $s"))

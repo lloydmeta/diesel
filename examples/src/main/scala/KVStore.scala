@@ -31,7 +31,7 @@ object KVStore {
 
   type KVStoreState[A] = State[Map[String, Any], A]
 
-  trait KVSStateInterpreter extends Algebra[KVStoreState] {
+  trait KVSStateInterpreter extends KVStore[KVStoreState] {
     val m: Monad[KVStoreState] = Monad[KVStoreState]
 
     def put[A](k: String, o: A): KVStoreState[Unit] = State.modify(_.updated(k, o))

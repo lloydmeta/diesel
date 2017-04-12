@@ -11,7 +11,7 @@ trait Maths[F[_]] {
 @SuppressWarnings(Array("org.wartremover.warts.Any"))
 object Maths {
 
-  trait KVSStateInterpreter extends Algebra[KVStoreState] {
+  trait KVSStateInterpreter extends Maths[KVStoreState] {
     private val m   = implicitly[Monad[KVStoreState]]
     def int(i: Int) = m.pure(i)
     def add(x: KVStoreState[Int], y: KVStoreState[Int]) =
