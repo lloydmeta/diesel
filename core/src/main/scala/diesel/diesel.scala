@@ -6,7 +6,7 @@ import scala.annotation.compileTimeOnly
   * Annotation used for expanding a trait parameterised with a type that takes
   * one type application into a DSL.
   *
-  * By default, the algebra generated will have the name "Algebra", but this annotation
+  * By default, the operations generated will have the name "Ops", but this annotation
   * takes a String argument that you can use to customise it.
   *
   * If you wish to put concrete methods into the resulting companion object, write them
@@ -31,13 +31,13 @@ import scala.annotation.compileTimeOnly
   *
   * // Write an interpreter
   * scala> type Id[A] = A
-  * scala> val interpreter = new Maths.Algebra[Id] {
+  * scala> val interpreter = new Maths[Id] {
   *      |   def int(i: Int)                 = i
   *      |   def add(l: Id[Int], r: Id[Int]) = l + r
   *      | }
   *
   * // Now we can use our DSL
-  * scala> import Maths._
+  * scala> import Maths._, Ops._
   *
   * scala> int(3)(interpreter)
   * res0: Int = 3
@@ -48,7 +48,7 @@ import scala.annotation.compileTimeOnly
   */
 @SuppressWarnings(Array("org.wartremover.warts.DefaultArguments"))
 @compileTimeOnly("Enable macro paradise to expand macro annotations")
-class diesel(algebra: String = Defaults.AlgebraName) extends scala.annotation.StaticAnnotation {
+class diesel(opsName: String = Defaults.OpsName) extends scala.annotation.StaticAnnotation {
 
   inline def apply(defn: Any): Any = meta {
     val r = internal.MacroImpl.expand(this, defn)
@@ -59,7 +59,7 @@ class diesel(algebra: String = Defaults.AlgebraName) extends scala.annotation.St
 }
 
 object Defaults {
-  val AlgebraName: String = "Algebra"
+  val OpsName: String = "Ops"
 }
 
 /**

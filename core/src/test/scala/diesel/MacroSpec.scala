@@ -31,7 +31,7 @@ class MacroSpec extends FunSpec with Matchers {
                                               hInt: H[Int]): G[Int]
       }
 
-      val interpreter = new Maths.Algebra[Id] {
+      val interpreter = new Maths[Id] {
         protected val meh: Int                                                        = 3
         def int(i: Int)                                                               = i
         def add(l: Id[Int], r: Id[Int])                                               = l + r
@@ -39,7 +39,7 @@ class MacroSpec extends FunSpec with Matchers {
         def mixedInts[H[_]](i: Int, optInt: Option[Int], gInt: Id[Int], hInt: H[Int]) = i
       }
 
-      import Maths._
+      import Maths.Ops._
 
       it("should expand a trait into an object holding Algebra and DSL wrapper methods") {
         int(3)(interpreter) shouldBe 3
@@ -57,14 +57,14 @@ class MacroSpec extends FunSpec with Matchers {
         def pure[A](a: A): F[A]
       }
 
-      def applicative[F[_]](implicit F: Applicative[F]): ApplicativeInterpreter.Algebra[F] =
-        new ApplicativeInterpreter.Algebra[F] {
+      def applicative[F[_]](implicit F: Applicative[F]): ApplicativeInterpreter[F] =
+        new ApplicativeInterpreter[F] {
           def map2[A, B, C](fa: F[A], fb: F[B])(f: (A, B) => C): F[C] =
             F.map2(fa, fb)(f)
           def pure[A](a: A): F[A] = F.pure(a)
         }
 
-      import ApplicativeInterpreter._
+      import ApplicativeInterpreter._, Ops._
       import cats.implicits._
 
       val program = map2(pure(1), pure(2))(_ + _)
@@ -92,13 +92,13 @@ class MacroSpec extends FunSpec with Matchers {
         object Maths {
           val answer: Int = 42
 
-          val interpreter = new Algebra[Id] {
+          val interpreter = new Maths[Id] {
             def int(i: Int)                 = i
             def add(l: Id[Int], r: Id[Int]) = l + r
           }
         }
 
-        import Maths._
+        import Maths._, Ops._
 
         it("should expand a trait into an object holding Algebra and DSL wrapper methods") {
           int(3)(interpreter) shouldBe 3
@@ -108,10 +108,10 @@ class MacroSpec extends FunSpec with Matchers {
       }
     }
 
-    describe("when the annotation is passed an Algebra name") {
+    describe("when the annotation is passed an Ops name") {
       describe("Simple Maths DSL") {
 
-        @diesel("Alg")
+        @diesel("Operations")
         trait Maths[G[_]] {
           def int(i: Int): G[Int]
           def add(l: G[Int], r: G[Int]): G[Int]
@@ -120,13 +120,13 @@ class MacroSpec extends FunSpec with Matchers {
         object Maths {
           val answer: Int = 42
 
-          val interpreter = new Alg[Id] {
+          val interpreter = new Maths[Id] {
             def int(i: Int)                 = i
             def add(l: Id[Int], r: Id[Int]) = l + r
           }
         }
 
-        import Maths._
+        import Maths._, Maths.Operations._
 
         it("should expand a trait into an object holding Algebra and DSL wrapper methods") {
           int(3)(interpreter) shouldBe 3

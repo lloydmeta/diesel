@@ -7,29 +7,30 @@ import _root_.diesel.Defaults
 
 object MacroImpl {
 
-  private val DslType = t"_root_.diesel.Dsl"
-  private val DslCtor = ctor"_root_.diesel.Dsl"
+  private val DslImport = q"import _root_.diesel.Dsl"
+  private val DslType   = t"Dsl"
+  private val DslCtor   = ctor"Dsl"
 
   def expand(self: Tree, defn: Tree): Stat = {
-    val algebraType: Type.Name = {
+    val opsName: Term.Name = {
       val arg = self match {
         case q"new $_(${Lit(arg: String)})" => arg
-        case _                              => Defaults.AlgebraName
+        case _                              => Defaults.OpsName
       }
-      Type.Name(arg)
+      Term.Name(arg)
     }
     defn match {
       // No companion object
-      case q"..$mods trait $tname[..$tparams] extends $template" => {
-        val TaglessFinalTrees(statements, dslWrappers) = buildTrees(algebraType, tparams, template)
+      case SupportedAnnottee(extracted) => {
+        val (mods, tname, tparams, template) =
+          (extracted.mods, extracted.tname, extracted.tparams, extracted.template)
+        val TaglessFinalTrees(traitTemplate, opsObject) =
+          buildTrees(tname, opsName, tparams, template)
         Term.Block(
           Seq(
-            // Emitted empty private trait for IntelliJ
-            q"private sealed trait $tname",
-            q"""..$mods object ${Term.Name(tname.value)} {
-             ..${statements.stats}
-             ..$dslWrappers
-
+            extracted.withNewTemplate(traitTemplate),
+            q"""..${objectModsOnly(mods)} object ${Term.Name(tname.value)} {
+               $opsObject
            }
           """
           ))
@@ -38,32 +39,46 @@ object MacroImpl {
       // There is a companion object
       case Term.Block(
           Seq(
-            q"..$mods trait $tname[..$tparams] extends $template",
+            SupportedAnnottee(extracted),
             companion: Defn.Object
           )
           ) => {
-        val TaglessFinalTrees(statements, dslWrappers) = buildTrees(algebraType, tparams, template)
+        val (mods, tname, tparams, template) =
+          (extracted.mods, extracted.tname, extracted.tparams, extracted.template)
+        val TaglessFinalTrees(newTemplate, opsObject) =
+          buildTrees(tname, opsName, tparams, template)
         val templateStats: Seq[Stat] =
-          statements.stats ++ dslWrappers ++ companion.templ.stats.getOrElse(Nil)
-        val newTemplate = companion.templ.copy(stats = Some(templateStats))
+          opsObject +: companion.templ.stats.getOrElse(Nil)
+        val newObjTemplate = companion.templ.copy(stats = Some(templateStats))
         Term.Block(
           Seq(
-            // Emitted empty private trait for IntelliJ
-            q"private sealed trait $tname",
-            companion.copy(templ = newTemplate)
+            extracted.withNewTemplate(newTemplate),
+            companion.copy(templ = newObjTemplate)
           )
         )
       }
-      case _ => abort("Sorry, we only work on traits")
+      case other =>
+        abort(
+          s"Sorry, the @diesel annotation currently only works on traits and classes, but you passed:\n\n${other.syntax}")
     }
   }
 
-  private def buildTrees(algebraType: Type.Name,
+  private def objectModsOnly(ms: Seq[Mod]): Seq[Mod] = ms.filter {
+    case mod"final"    => false
+    case mod"abstract" => false
+    case mod"sealed"   => false
+    case mod"override" => false
+    case mod"lazy"     => false
+    case _             => true
+  }
+
+  private def buildTrees(algebraName: Type.Name,
+                         opsName: Term.Name,
                          tparams: Seq[Type.Param],
                          template: Template): TaglessFinalTrees = {
     tparams match {
       case Seq(tparam) if tparam.tparams.size == 1 => {
-        val typedContext = new TaglessFinalBuilder(algebraType, tparam, template)
+        val typedContext = new TaglessFinalBuilder(algebraName, opsName, tparam, template)
         typedContext.build()
       }
       case _ =>
@@ -71,8 +86,12 @@ object MacroImpl {
     }
   }
 
-  private class TaglessFinalBuilder(algebraType: Type.Name, tparam: Type.Param, template: Template) {
+  private class TaglessFinalBuilder(algebraType: Type.Name,
+                                    opsObjectName: Term.Name,
+                                    tparam: Type.Param,
+                                    template: Template) {
 
+    private val boundlessTParam           = tparam.copy(cbounds = Nil)
     private val tparamName                = tparam.name.value
     private val tparamAsType              = Type.fresh().copy(tparamName)
     private val templateStatements        = template.stats.toSeq.flatten
@@ -103,13 +122,13 @@ object MacroImpl {
         template"""{..${template.early}} with ..${template.parents} { ${template.self} =>
                     ..$sortedTemplateStats
                    }"""
-      val statements  = q"""
-                import scala.language.higherKinds
-
-                trait $algebraType[$tparam] extends $traitTemplate
-        """
       val dslWrappers = generateDslWrappers(abstracts, concretes)
-      TaglessFinalTrees(statements, dslWrappers)
+      val opsWrapper =
+        q"""object $opsObjectName {
+            $DslImport
+           ..$dslWrappers
+           }"""
+      TaglessFinalTrees(traitTemplate, opsWrapper)
     }
 
     private def ensureSoundMembers(dslMembers: List[Stat],
@@ -126,6 +145,8 @@ object MacroImpl {
              |      added to the trait's companion object.""".stripMargin,
            nonMatchingKindPf(dslMembersSet ++ localsSet)),
           ("Vars are not allowed.", varsPf(localsSet)),
+          ("Vals that are not assignments are not allowed at the moment",
+           patternMatchingVals(localsSet)),
           (s"""This method has a type parameter that shadows the $tparamName[_] used to annotate the trait.
              |      Besides being confusing for readers of your code, this is not currently supported by diesel.""".stripMargin,
            methodsShadowingTParamPF)
@@ -303,12 +324,19 @@ object MacroImpl {
         d
     }
 
+    @SuppressWarnings(Array("org.wartremover.warts.IsInstanceOf"))
+    private def patternMatchingVals(exempt: Set[Stat]): StatPF = {
+      case v @ Defn.Val(_, Seq(first, _ @_ *), _, _)
+          if !(exempt.contains(v) || first.isInstanceOf[Pat.Var.Term]) =>
+        v
+    }
+
     private def generateDslWrappers(decls: List[Decl], defns: List[Defn]): List[Defn] = {
       def buildWrappedDef(mods: Seq[Mod],
                           name: Term.Name,
                           paramss: Seq[Seq[Term.Param]],
                           tparams: Seq[Param],
-                          declTargs: Seq[Type]): Defn.Def = {
+                          declTargs: Seq[Type]): Seq[Defn.Def] = {
         val newParamss = paramss.map { params =>
           params.map { param =>
             param.decltpe match {
@@ -334,23 +362,20 @@ object MacroImpl {
         val newDeclTpe = t"$DslType[$algebraType, ..$declTargs]"
         val body =
           q"""new $DslCtor[$algebraType, ..$declTargs] {
-               def apply[$tparam](implicit I: $algebraType[$tparamAsType]): $tparamAsType[..$declTargs] = I.$name(...$interpreterArgs)
+               def apply[$boundlessTParam](implicit I: $algebraType[$tparamAsType]): $tparamAsType[..$declTargs] = I.$name(...$interpreterArgs)
               }"""
-        Defn.Def(mods, name, tparams, newParamss, Some(newDeclTpe), body)
+        // Return a Seq to match the wrapped Val builder
+        Seq(Defn.Def(mods, name, tparams, newParamss, Some(newDeclTpe), body))
       }
 
-      // TODO move abort to ensureSoundness
       def buildWrappedVal(mods: Seq[Mod], pats: Seq[Pat.Var.Term], declTargs: Seq[Type]) = {
-        val patName = pats match {
-          case Seq(p) => p
-          case _ =>
-            abort(s"""Pattern-matched values are not supported at the moment: $pats""")
-        }
-        val body       = q"""new $DslCtor[$algebraType, ..$declTargs] {
-               def apply[$tparam](implicit I: $algebraType[$tparamAsType]): $tparamAsType[..$declTargs] = I.${patName.name}
+        pats.map { patName =>
+          val body       = q"""new $DslCtor[$algebraType, ..$declTargs] {
+               def apply[$boundlessTParam](implicit I: $algebraType[$tparamAsType]): $tparamAsType[..$declTargs] = I.${patName.name}
               }"""
-        val newDeclTpe = t"$DslType[$algebraType, ..$declTargs]"
-        Defn.Val(mods, pats, Some(newDeclTpe), body)
+          val newDeclTpe = t"$DslType[$algebraType, ..$declTargs]"
+          Defn.Val(mods, pats, Some(newDeclTpe), body)
+        }
       }
 
       (decls ++ defns).collect {
@@ -395,11 +420,11 @@ object MacroImpl {
                           Some(Type.Apply(retName: Type.Name, declTargs)),
                           _) if retName.value == tparamName =>
           buildWrappedVal(mods, Seq(patName), declTargs)
-      }
+      }.flatten
     }
 
   }
 
-  private case class TaglessFinalTrees(modules: Term.Block, wrapperMethods: List[Defn])
+  private case class TaglessFinalTrees(traitTemplate: Template, opsObject: Defn.Object)
 
 }

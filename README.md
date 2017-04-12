@@ -2,12 +2,14 @@
 
 Boilerplate free Finally Tagless DSL macro annotation, written in [scala.meta](http://scalameta.org/) for future compatibility and other nice things (like free IDE support).
 
-WIP
-
 ## General idea
 
 This plugin provides an annotation that expands a given trait into an object
 holding a Tagless Final Algebra and DSL wrapper methods.
+
+The DSL Wrapper methods are generated in the trait's companion object inside an object
+called `Ops` (customisable). These are useful when you need to compose multiple DSLs in
+the context of a shared `F[_]`.
 
 Example:
 
@@ -16,7 +18,7 @@ import cats._, implicits._
 import diesel.diesel
 object DieselDemo extends App {
 
-// Declare your DSL
+  // Declare your DSL
   @diesel
   trait Maths[F[_]] {
     def int(i: Int): F[Int]
@@ -28,9 +30,9 @@ object DieselDemo extends App {
     def info(s: String): F[Unit]
   }
 
-  // Use the auto-generated wrapper methods when composing 2+ DSLs using Monad[F] 
-  import Maths._, Logging._
-  def addAndLog[F[_]: Monad: Maths.Algebra: Logging.Algebra](x: Int, y: Int): F[Int] = {
+  // Use the auto-generated wrapper methods when composing 2+ DSLs using Monad[F]
+  import Maths.Ops._, Logging.Ops._
+  def addAndLog[F[_]: Monad: Maths: Logging](x: Int, y: Int): F[Int] = {
     for {
       r <- add(int(x), int(y))[F]
       _ <- info(s"result $r")[F]
@@ -38,7 +40,7 @@ object DieselDemo extends App {
   }
 
   // Write an interpreter
-  implicit val interp = new Maths.Algebra[Id] with Logging.Algebra[Id] {
+  implicit val interp = new Maths[Id] with Logging[Id] {
     def int(a: Int)                 = a
     def add(a: Id[Int], b: Id[Int]) = a + b
     def info(msg: String)           = println(msg)
@@ -56,7 +58,8 @@ result 3
 For more in-depth examples, check out:
 
   1. [examples/KVSApp](https://github.com/lloydmeta/diesel/blob/master/examples/src/main/scala/KVSApp.scala): a simple single-DSL program 
-  2. [examples/KVSLoggingApp](https://github.com/lloydmeta/diesel/blob/master/examples/src/main/scala/KVSLoggingApp.scala): mixing 3 DSLs in a program
+  2. [examples/KVSLoggingApp](https://github.com/lloydmeta/diesel/blob/master/examples/src/main/scala/KVSLoggingApp.scala): mixing 2 DSLs in a program
+  3. [examples/FibApp](https://github.com/lloydmeta/diesel/blob/master/examples/src/main/scala/FibApp.scala): mixing 3 DSLs in a program
 
 ## How it works
 
@@ -71,25 +74,27 @@ trait Maths[F[_]] {
 is expanded into
 
 ```scala
-object Maths {
-
-  import scala.language.higherKinds
-  import _root_.diesel.Dsl
-
-  trait Algebra[F[_]] {
+  trait Maths[F[_]] {
     def int(i: Int): F[Int]
 
     def add(l: F[Int], r: F[Int]): F[Int]
   }
 
-  def int(i: Int): Dsl[Algebra, Int] = new Dsl[Algebra, Int] {
-    def apply[F[_]](implicit interpreter: Algebra[F]): F[Int] = interpreter.int(i)
-  }
+  object Maths {
+  
+    import diesel.Dsl
 
-  def add(l: Dsl[Algebra, Int], r: Dsl[Algebra, Int]): Dsl[Algebra, Int] = new Dsl[Algebra, Int] {
-    def apply[F[_]](implicit interpreter: Algebra[F]): F[Int] = interpreter.add(l.apply[F], r.apply[F])
+    object Ops {
+      def int(i: Int): Dsl[Maths, Int] = new Dsl[Maths, Int] {
+        def apply[F[_]](implicit I: Maths[F]): F[Int] = I.int(i)
+      }
+
+      def add(l: Dsl[Maths, Int], r: Dsl[Maths, Int]): Dsl[Maths, Int] = new Dsl[Maths, Int] {
+        def apply[F[_]](implicit I: Maths[F]): F[Int] = I.add(l.apply[F], r.apply[F])
+      }
+    }
+
   }
-}
 ```
 
 ## Sbt
@@ -116,12 +121,14 @@ scalacOptions += "-Xplugin-require:macroparadise"
 
 ```
 
-There are also 2 sub-projects that provide implicit conversions from Dsl to a Monad (in the presence of an interpreter)
-so that you can use your DSL with for-comprehensions as demonstrated in @cb372's talk below.
+There are also 2 sub-projects that provide implicit conversions from Dsl to MonadicDsl so that you can compose multiple
+DSLs *without* having to use defs that take implicit Monad and Interpreter parameters. 
 
-Choose one or the other:
+For an example of how this looks, take a look [here](https://github.com/lloydmeta/diesel/blob/master/examples/src/main/scala/KVSLoggingApp.scala#L43-L55)
 
 ```scala
+// Choose one or the other:
+
 // for cats
 libraryDependencies += "com.beachape" %% "diesel-cats" % s"$latest_version"
 // for scalaz  

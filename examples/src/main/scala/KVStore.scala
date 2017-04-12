@@ -1,12 +1,13 @@
 import cats.Monad
 import cats.data.State
-import diesel.{diesel, local}
+import diesel.diesel
 
+/**
+  * Note that we're using an abstract class with a Monad constraint on F, thus
+  * allowing us to directly use F as a Monad inside our DSL declaration
+  */
 @diesel
-trait KVStore[F[_]] {
-
-  @local
-  implicit def m: Monad[F]
+abstract class KVStore[F[_]: Monad] {
 
   def put[A](k: String, o: A): F[Unit]
 
@@ -21,7 +22,7 @@ trait KVStore[F[_]] {
         val b = f(v)
         put(k, b)
       }
-      case None => m.pure(())
+      case None => Monad[F].pure(())
     }
   }
 }
@@ -31,8 +32,7 @@ object KVStore {
 
   type KVStoreState[A] = State[Map[String, Any], A]
 
-  trait KVSStateInterpreter extends Algebra[KVStoreState] {
-    val m: Monad[KVStoreState] = Monad[KVStoreState]
+  trait KVSStateInterpreter extends KVStore[KVStoreState] {
 
     def put[A](k: String, o: A): KVStoreState[Unit] = State.modify(_.updated(k, o))
 
