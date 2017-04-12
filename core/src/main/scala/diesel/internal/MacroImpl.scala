@@ -26,7 +26,7 @@ object MacroImpl {
           Seq(
             // Emitted empty private trait for IntelliJ
             q"private sealed trait $tname",
-            q"""..$mods object ${Term.Name(tname.value)} {
+            q"""..${objectModsOnly(mods)} object ${Term.Name(tname.value)} {
              ..${statements.stats}
              ..$dslWrappers
 
@@ -56,6 +56,15 @@ object MacroImpl {
       }
       case _ => abort("Sorry, we only work on traits")
     }
+  }
+
+  private def objectModsOnly(ms: Seq[Mod]): Seq[Mod] = ms.filter {
+    case mod"final"    => false
+    case mod"abstract" => false
+    case mod"sealed"   => false
+    case mod"override" => false
+    case mod"lazy"     => false
+    case _             => true
   }
 
   private def buildTrees(algebraType: Type.Name,
