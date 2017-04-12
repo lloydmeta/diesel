@@ -120,8 +120,8 @@ scalacOptions += "-Xplugin-require:macroparadise"
 
 ```
 
-There are also 2 sub-projects that provide implicit conversions from Dsl to a Monad (in the presence of an interpreter)
-so that you can use your DSL with for-comprehensions as demonstrated in @cb372's talk below.
+There are also 2 sub-projects that provide implicit conversions from Dsl to MonadicDsl so that you can compose multiple
+DSLs *without* having to use defs that take implicit Monad and Interpreter parameters. 
 
 Choose one or the other:
 
