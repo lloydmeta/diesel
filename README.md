@@ -1,15 +1,15 @@
 # Diesel [![Build Status](https://travis-ci.org/lloydmeta/diesel.svg?branch=master)](https://travis-ci.org/lloydmeta/diesel) [![Maven Central](https://maven-badges.herokuapp.com/maven-central/com.beachape/diesel-core_2.11/badge.svg)](https://maven-badges.herokuapp.com/maven-central/com.beachape/diesel-core_2.11)
 
-Boilerplate free Finally Tagless DSL macro annotation, written in [scala.meta](http://scalameta.org/) for future compatibility and other nice things (like free IDE support).
+Boilerplate free Tagless Final DSL macro annotation, written in [scala.meta](http://scalameta.org/) for future compatibility and other nice things (e.g. free IDE support, like in IntelliJ).
 
 ## General idea
 
-This plugin provides an annotation that expands a given trait into an object
-holding a Tagless Final Algebra and DSL wrapper methods.
+This plugin provides an annotation that cuts out the boilerplate associated with writing composable Tagless 
+Final DSLs.
 
-The DSL Wrapper methods are generated in the trait's companion object inside an object
-called `Ops` (customisable). These are useful when you need to compose multiple DSLs in
-the context of a shared `F[_]`.
+The DSL wrapper methods are generated in the annotated trait's companion object, inside an object called `Ops` 
+(customisable by passing a name to the annotation as an argument). These are useful when you need to compose 
+multiple DSLs in the context of `F[_]`.
 
 Example:
 
@@ -58,8 +58,10 @@ result 3
 For more in-depth examples, check out:
 
   1. [examples/KVSApp](https://github.com/lloydmeta/diesel/blob/master/examples/src/main/scala/KVSApp.scala): a simple single-DSL program 
-  2. [examples/KVSLoggingApp](https://github.com/lloydmeta/diesel/blob/master/examples/src/main/scala/KVSLoggingApp.scala): mixing 2 DSLs in a program
-  3. [examples/FibApp](https://github.com/lloydmeta/diesel/blob/master/examples/src/main/scala/FibApp.scala): mixing 3 DSLs in a program
+  2. [examples/KVSLoggingApp](https://github.com/lloydmeta/diesel/blob/master/examples/src/main/scala/KVSLoggingApp.scala): composing 2 DSLs in a program
+  3. [examples/FibApp](https://github.com/lloydmeta/diesel/blob/master/examples/src/main/scala/FibApp.scala): composing 3 DSLs in a program that calculates fibonacci numbers and caches them.
+  
+All of the above examples use a pure KVS interpreter :)
 
 ## How it works
 
@@ -74,27 +76,29 @@ trait Maths[F[_]] {
 is expanded into
 
 ```scala
-  trait Maths[F[_]] {
-    def int(i: Int): F[Int]
+// Your algebra. Implement by providing a concrete F and you have your interpreter
+trait Maths[F[_]] {
+  def int(i: Int): F[Int]
 
-    def add(l: F[Int], r: F[Int]): F[Int]
+  def add(l: F[Int], r: F[Int]): F[Int]
+}
+
+object Maths {
+
+  import diesel.Dsl
+
+  // Wrapper methods that allow you to delay deciding on a concrete F, and thus
+  // are composable with other DSLs
+  object Ops {
+    def int(i: Int): Dsl[Maths, Int] = new Dsl[Maths, Int] {
+      def apply[F[_]](implicit I: Maths[F]): F[Int] = I.int(i)
   }
 
-  object Maths {
-  
-    import diesel.Dsl
-
-    object Ops {
-      def int(i: Int): Dsl[Maths, Int] = new Dsl[Maths, Int] {
-        def apply[F[_]](implicit I: Maths[F]): F[Int] = I.int(i)
-      }
-
-      def add(l: Dsl[Maths, Int], r: Dsl[Maths, Int]): Dsl[Maths, Int] = new Dsl[Maths, Int] {
-        def apply[F[_]](implicit I: Maths[F]): F[Int] = I.add(l.apply[F], r.apply[F])
-      }
+    def add(l: Dsl[Maths, Int], r: Dsl[Maths, Int]): Dsl[Maths, Int] = new Dsl[Maths, Int] {
+      def apply[F[_]](implicit I: Maths[F]): F[Int] = I.add(l.apply[F], r.apply[F])
     }
-
   }
+}
 ```
 
 ## Sbt

@@ -57,13 +57,6 @@ object KVSLoggingApp extends App {
   implicit val combinedInterp = new KVStore.KVSStateInterpreter with Logger.KVSStateInterpreter
   with Maths.KVSStateInterpreter {}
 
-  val r1 = program1[KVStoreState].run(Map.empty).value
-  println(s"Result 1: $r1")
-  val r2 = program2[KVStoreState].run(r1._1).value
-  println(s"Result 2: $r2")
-  val r3 = program3[KVStoreState].run(r2._1).value
-  println(s"Result 3: $r3")
-
   val prog = for {
     r1 <- program1[KVStoreState]
     _ = println(s"Result 1: $r1")
