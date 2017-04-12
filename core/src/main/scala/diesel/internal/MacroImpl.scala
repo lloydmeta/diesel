@@ -63,11 +63,6 @@ object MacroImpl {
     }
   }
 
-  private def hasAbstractMod(ms: Seq[Mod]): Boolean =
-    ms.collectFirst {
-      case m @ mod"abstract" => m
-    }.isDefined
-
   private def objectModsOnly(ms: Seq[Mod]): Seq[Mod] = ms.filter {
     case mod"final"    => false
     case mod"abstract" => false
