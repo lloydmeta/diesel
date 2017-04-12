@@ -57,7 +57,9 @@ object MacroImpl {
           )
         )
       }
-      case other => abort(s"Sorry, the @diesel annotation currnetly only works on traits and classes, but you passed:\n\n${other.syntax}")
+      case other =>
+        abort(
+          s"Sorry, the @diesel annotation currently only works on traits and classes, but you passed:\n\n${other.syntax}")
     }
   }
 
@@ -148,6 +150,8 @@ object MacroImpl {
              |      added to the trait's companion object.""".stripMargin,
            nonMatchingKindPf(dslMembersSet ++ localsSet)),
           ("Vars are not allowed.", varsPf(localsSet)),
+          ("Vals that are not assignments are not allowed at the moment",
+           patternMatchingVals(localsSet)),
           (s"""This method has a type parameter that shadows the $tparamName[_] used to annotate the trait.
              |      Besides being confusing for readers of your code, this is not currently supported by diesel.""".stripMargin,
            methodsShadowingTParamPF)
@@ -325,12 +329,19 @@ object MacroImpl {
         d
     }
 
+    @SuppressWarnings(Array("org.wartremover.warts.IsInstanceOf"))
+    private def patternMatchingVals(exempt: Set[Stat]): StatPF = {
+      case v @ Defn.Val(_, Seq(first, _ @_ *), _, _)
+          if !(exempt.contains(v) || first.isInstanceOf[Pat.Var.Term]) =>
+        v
+    }
+
     private def generateDslWrappers(decls: List[Decl], defns: List[Defn]): List[Defn] = {
       def buildWrappedDef(mods: Seq[Mod],
                           name: Term.Name,
                           paramss: Seq[Seq[Term.Param]],
                           tparams: Seq[Param],
-                          declTargs: Seq[Type]): Defn.Def = {
+                          declTargs: Seq[Type]): Seq[Defn.Def] = {
         val newParamss = paramss.map { params =>
           params.map { param =>
             param.decltpe match {
@@ -358,21 +369,18 @@ object MacroImpl {
           q"""new $DslCtor[$algebraType, ..$declTargs] {
                def apply[$boundlessTParam](implicit I: $algebraType[$tparamAsType]): $tparamAsType[..$declTargs] = I.$name(...$interpreterArgs)
               }"""
-        Defn.Def(mods, name, tparams, newParamss, Some(newDeclTpe), body)
+        // Return a Seq to match the wrapped Val builder
+        Seq(Defn.Def(mods, name, tparams, newParamss, Some(newDeclTpe), body))
       }
 
-      // TODO move abort to ensureSoundness
       def buildWrappedVal(mods: Seq[Mod], pats: Seq[Pat.Var.Term], declTargs: Seq[Type]) = {
-        val patName = pats match {
-          case Seq(p) => p
-          case _ =>
-            abort(s"""Pattern-matched values are not supported at the moment: $pats""")
-        }
-        val body       = q"""new $DslCtor[$algebraType, ..$declTargs] {
+        pats.map { patName =>
+          val body       = q"""new $DslCtor[$algebraType, ..$declTargs] {
                def apply[$boundlessTParam](implicit I: $algebraType[$tparamAsType]): $tparamAsType[..$declTargs] = I.${patName.name}
               }"""
-        val newDeclTpe = t"$DslType[$algebraType, ..$declTargs]"
-        Defn.Val(mods, pats, Some(newDeclTpe), body)
+          val newDeclTpe = t"$DslType[$algebraType, ..$declTargs]"
+          Defn.Val(mods, pats, Some(newDeclTpe), body)
+        }
       }
 
       (decls ++ defns).collect {
@@ -417,7 +425,7 @@ object MacroImpl {
                           Some(Type.Apply(retName: Type.Name, declTargs)),
                           _) if retName.value == tparamName =>
           buildWrappedVal(mods, Seq(patName), declTargs)
-      }
+      }.flatten
     }
 
   }
