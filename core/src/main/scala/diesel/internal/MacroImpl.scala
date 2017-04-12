@@ -11,25 +11,23 @@ object MacroImpl {
   private val DslCtor = ctor"_root_.diesel.Dsl"
 
   def expand(self: Tree, defn: Tree): Stat = {
-    val algebraType: Type.Name = {
+    val opsName: Term.Name = {
       val arg = self match {
         case q"new $_(${Lit(arg: String)})" => arg
-        case _                              => Defaults.AlgebraName
+        case _                              => Defaults.OpsName
       }
-      Type.Name(arg)
+      Term.Name(arg)
     }
     defn match {
       // No companion object
       case q"..$mods trait $tname[..$tparams] extends $template" => {
-        val TaglessFinalTrees(statements, dslWrappers) = buildTrees(algebraType, tparams, template)
+        val TaglessFinalTrees(traitTemplate, opsObject) =
+          buildTrees(tname, opsName, tparams, template)
         Term.Block(
           Seq(
-            // Emitted empty private trait for IntelliJ
-            q"private sealed trait $tname",
+            q"..$mods trait $tname[..$tparams] extends $traitTemplate",
             q"""..${objectModsOnly(mods)} object ${Term.Name(tname.value)} {
-             ..${statements.stats}
-             ..$dslWrappers
-
+               $opsObject
            }
           """
           ))
@@ -42,14 +40,15 @@ object MacroImpl {
             companion: Defn.Object
           )
           ) => {
-        val TaglessFinalTrees(statements, dslWrappers) = buildTrees(algebraType, tparams, template)
+        val TaglessFinalTrees(traitTemplate, opsObject) =
+          buildTrees(tname, opsName, tparams, template)
         val templateStats: Seq[Stat] =
-          statements.stats ++ dslWrappers ++ companion.templ.stats.getOrElse(Nil)
+          opsObject +: companion.templ.stats.getOrElse(Nil)
         val newTemplate = companion.templ.copy(stats = Some(templateStats))
         Term.Block(
           Seq(
             // Emitted empty private trait for IntelliJ
-            q"private sealed trait $tname",
+            q"..$mods trait $tname[..$tparams] extends $traitTemplate",
             companion.copy(templ = newTemplate)
           )
         )
@@ -67,12 +66,13 @@ object MacroImpl {
     case _             => true
   }
 
-  private def buildTrees(algebraType: Type.Name,
+  private def buildTrees(algebraName: Type.Name,
+                         opsName: Term.Name,
                          tparams: Seq[Type.Param],
                          template: Template): TaglessFinalTrees = {
     tparams match {
       case Seq(tparam) if tparam.tparams.size == 1 => {
-        val typedContext = new TaglessFinalBuilder(algebraType, tparam, template)
+        val typedContext = new TaglessFinalBuilder(algebraName, opsName, tparam, template)
         typedContext.build()
       }
       case _ =>
@@ -80,7 +80,10 @@ object MacroImpl {
     }
   }
 
-  private class TaglessFinalBuilder(algebraType: Type.Name, tparam: Type.Param, template: Template) {
+  private class TaglessFinalBuilder(algebraType: Type.Name,
+                                    opsObjectName: Term.Name,
+                                    tparam: Type.Param,
+                                    template: Template) {
 
     private val tparamName                = tparam.name.value
     private val tparamAsType              = Type.fresh().copy(tparamName)
@@ -112,13 +115,12 @@ object MacroImpl {
         template"""{..${template.early}} with ..${template.parents} { ${template.self} =>
                     ..$sortedTemplateStats
                    }"""
-      val statements  = q"""
-                import scala.language.higherKinds
-
-                trait $algebraType[$tparam] extends $traitTemplate
-        """
       val dslWrappers = generateDslWrappers(abstracts, concretes)
-      TaglessFinalTrees(statements, dslWrappers)
+      val opsWrapper =
+        q"""object $opsObjectName {
+           ..$dslWrappers
+           }"""
+      TaglessFinalTrees(traitTemplate, opsWrapper)
     }
 
     private def ensureSoundMembers(dslMembers: List[Stat],
@@ -409,6 +411,6 @@ object MacroImpl {
 
   }
 
-  private case class TaglessFinalTrees(modules: Term.Block, wrapperMethods: List[Defn])
+  private case class TaglessFinalTrees(traitTemplate: Template, opsObject: Defn.Object)
 
 }
