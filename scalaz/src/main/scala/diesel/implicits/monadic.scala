@@ -24,20 +24,20 @@ import scala.language.higherKinds
   *      |   def add(l: G[Int], r: G[Int]): G[Int]
   *      | }
   *      | @diesel
-  *      |  trait Applicative[F[_]] {
+  *      |  trait Applicatives[F[_]] {
   *      |    def map2[A, B, C](fa: F[A], fb: F[B])(f: (A, B) => C): F[C]
   *      |    def pure[A](a: A): F[A]
   *      | } }
   *
   * // Import the stuff we've just built
   * scala> import Wrapper._
-  * scala> import Maths._
-  * scala> import Applicative._
+  * scala> import Maths.Ops._
+  * scala> import Applicatives.Ops._
   * scala> import scalaz.Monad
   * scala> import scalaz.Scalaz._
   *
   * // Our combined algebra type and our program that uses it
-  * scala> type PRG[A[_]] = Applicative.Algebra[A] with Maths.Algebra[A]
+  * scala> type PRG[A[_]] = Applicatives[A] with Maths[A]
   * scala> val op = { (a: Int, b: Int, c: Int) =>
   *      |    import monadic._
   *      |    // Note the use of for comprehensions in here
@@ -49,7 +49,7 @@ import scala.language.higherKinds
   *      | }
 
   * // Write our interpreter
-  * scala> implicit def interp[F[_]](implicit F: Monad[F]) = new Applicative.Algebra[F] with Maths.Algebra[F] {
+  * scala> implicit def interp[F[_]](implicit F: Monad[F]) = new Applicatives[F] with Maths[F] {
   *      |    def int(i: Int) = F.pure(i)
   *      |    def add(l: F[Int], r: F[Int]) =
   *      |      for {

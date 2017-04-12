@@ -17,7 +17,7 @@ class ImplicitsSpec extends FunSpec with Matchers {
     }
 
     @diesel
-    trait Applicative[F[_]] {
+    trait Applicatives[F[_]] {
       def map2[A, B, C](fa: F[A], fb: F[B])(f: (A, B) => C): F[C]
       def pure[A](a: A): F[A]
     }
@@ -31,11 +31,12 @@ class ImplicitsSpec extends FunSpec with Matchers {
 
     }
 
-    import Maths._
-    import Applicative._
+    import Maths.Ops._
+    import Applicatives.Ops._
+    import Logging.{Ops => LoggingOps}
 
     // Our combined applicative and maths algebra type
-    type ApMaths[A[_]] = Applicative.Algebra[A] with Maths.Algebra[A]
+    type ApMaths[A[_]] = Applicatives[A] with Maths[A]
     val monadicPlusOp = { (a: Int, b: Int, c: Int) =>
       import monadicplus._
       for {
@@ -48,12 +49,12 @@ class ImplicitsSpec extends FunSpec with Matchers {
 
     // Composing a composed DSL...
     // Our combined applicative and maths *and* logging algebras
-    type PRG[A[_]] = ApMaths[A] with Logging.Algebra[A]
+    type PRG[A[_]] = ApMaths[A] with Logging[A]
     val monadicPlusOpWithWarn = { (a: Int, b: Int, c: Int) =>
       import monadicplus._
       for {
         v <- monadicPlusOp(a, b, c).withAlg[PRG]
-        _ <- Logging.warn(v.toString).withAlg[PRG]
+        _ <- LoggingOps.warn(v.toString).withAlg[PRG]
       } yield v
     }
 
@@ -62,7 +63,7 @@ class ImplicitsSpec extends FunSpec with Matchers {
       for {
         i <- add(int(a), int(b)).withAlg[PRG]
         j <- pure(c).withAlg[PRG]
-        _ <- Logging.info(j.toString).withAlg[PRG]
+        _ <- LoggingOps.info(j.toString).withAlg[PRG]
         k <- add(int(i), int(j)).withAlg[PRG]
       } yield k
     }
@@ -72,13 +73,13 @@ class ImplicitsSpec extends FunSpec with Matchers {
       for {
         i <- monadicOp(a, b, c).toPlus
         if i > 0
-        _ <- Logging.info(i.toString).withAlg[PRG]
+        _ <- LoggingOps.info(i.toString).withAlg[PRG]
       } yield i
     }
 
     import cats.implicits._
     implicit def interp[F[_]](implicit F: Monad[F]) =
-      new Applicative.Algebra[F] with Maths.Algebra[F] with Logging.Algebra[F] {
+      new Applicatives[F] with Maths[F] with Logging[F] {
         def int(i: Int) = F.pure(i)
         def add(l: F[Int], r: F[Int]) =
           for {
