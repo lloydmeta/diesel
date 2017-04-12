@@ -21,12 +21,14 @@ object MacroImpl {
     }
     defn match {
       // No companion object
-      case q"..$mods trait $tname[..$tparams] extends $template" => {
+      case SupportedAnnottee(extracted) => {
+        val (mods, tname, tparams, template) =
+          (extracted.mods, extracted.tname, extracted.tparams, extracted.template)
         val TaglessFinalTrees(traitTemplate, opsObject) =
           buildTrees(tname, opsName, tparams, template)
         Term.Block(
           Seq(
-            q"..$mods trait $tname[..$tparams] extends $traitTemplate",
+            extracted.withNewTemplate(traitTemplate),
             q"""..${objectModsOnly(mods)} object ${Term.Name(tname.value)} {
                $opsObject
            }
@@ -37,26 +39,32 @@ object MacroImpl {
       // There is a companion object
       case Term.Block(
           Seq(
-            q"..$mods trait $tname[..$tparams] extends $template",
+            SupportedAnnottee(extracted),
             companion: Defn.Object
           )
           ) => {
-        val TaglessFinalTrees(traitTemplate, opsObject) =
+        val (mods, tname, tparams, template) =
+          (extracted.mods, extracted.tname, extracted.tparams, extracted.template)
+        val TaglessFinalTrees(newTemplate, opsObject) =
           buildTrees(tname, opsName, tparams, template)
         val templateStats: Seq[Stat] =
           opsObject +: companion.templ.stats.getOrElse(Nil)
-        val newTemplate = companion.templ.copy(stats = Some(templateStats))
+        val newObjTemplate = companion.templ.copy(stats = Some(templateStats))
         Term.Block(
           Seq(
-            // Emitted empty private trait for IntelliJ
-            q"..$mods trait $tname[..$tparams] extends $traitTemplate",
-            companion.copy(templ = newTemplate)
+            extracted.withNewTemplate(newTemplate),
+            companion.copy(templ = newObjTemplate)
           )
         )
       }
-      case _ => abort("Sorry, we only work on traits")
+      case other => abort(s"Sorry, the @diesel annotation currnetly only works on traits and classes, but you passed:\n\n${other.syntax}")
     }
   }
+
+  private def hasAbstractMod(ms: Seq[Mod]): Boolean =
+    ms.collectFirst {
+      case m @ mod"abstract" => m
+    }.isDefined
 
   private def objectModsOnly(ms: Seq[Mod]): Seq[Mod] = ms.filter {
     case mod"final"    => false
@@ -86,6 +94,7 @@ object MacroImpl {
                                     tparam: Type.Param,
                                     template: Template) {
 
+    private val boundlessTParam           = tparam.copy(cbounds = Nil)
     private val tparamName                = tparam.name.value
     private val tparamAsType              = Type.fresh().copy(tparamName)
     private val templateStatements        = template.stats.toSeq.flatten
@@ -347,7 +356,7 @@ object MacroImpl {
         val newDeclTpe = t"$DslType[$algebraType, ..$declTargs]"
         val body =
           q"""new $DslCtor[$algebraType, ..$declTargs] {
-               def apply[$tparam](implicit I: $algebraType[$tparamAsType]): $tparamAsType[..$declTargs] = I.$name(...$interpreterArgs)
+               def apply[$boundlessTParam](implicit I: $algebraType[$tparamAsType]): $tparamAsType[..$declTargs] = I.$name(...$interpreterArgs)
               }"""
         Defn.Def(mods, name, tparams, newParamss, Some(newDeclTpe), body)
       }
@@ -360,7 +369,7 @@ object MacroImpl {
             abort(s"""Pattern-matched values are not supported at the moment: $pats""")
         }
         val body       = q"""new $DslCtor[$algebraType, ..$declTargs] {
-               def apply[$tparam](implicit I: $algebraType[$tparamAsType]): $tparamAsType[..$declTargs] = I.${patName.name}
+               def apply[$boundlessTParam](implicit I: $algebraType[$tparamAsType]): $tparamAsType[..$declTargs] = I.${patName.name}
               }"""
         val newDeclTpe = t"$DslType[$algebraType, ..$declTargs]"
         Defn.Val(mods, pats, Some(newDeclTpe), body)

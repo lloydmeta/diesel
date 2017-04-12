@@ -1,12 +1,9 @@
 import cats.Monad
 import cats.data.State
-import diesel.{diesel, local}
+import diesel.diesel
 
 @diesel
-trait KVStore[F[_]] {
-
-  @local
-  implicit def m: Monad[F]
+abstract class KVStore[F[_]: Monad] {
 
   def put[A](k: String, o: A): F[Unit]
 
@@ -21,7 +18,7 @@ trait KVStore[F[_]] {
         val b = f(v)
         put(k, b)
       }
-      case None => m.pure(())
+      case None => Monad[F].pure(())
     }
   }
 }
@@ -32,7 +29,6 @@ object KVStore {
   type KVStoreState[A] = State[Map[String, Any], A]
 
   trait KVSStateInterpreter extends KVStore[KVStoreState] {
-    val m: Monad[KVStoreState] = Monad[KVStoreState]
 
     def put[A](k: String, o: A): KVStoreState[Unit] = State.modify(_.updated(k, o))
 
