@@ -2,6 +2,10 @@ import cats.Monad
 import cats.data.State
 import diesel.diesel
 
+/**
+  * Note that we're using an abstract class with a Monad constraint on F, thus
+  * allowing us to directly use F as a Monad inside our DSL declaration
+  */
 @diesel
 abstract class KVStore[F[_]: Monad] {
 
