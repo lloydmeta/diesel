@@ -64,4 +64,15 @@ object KVSLoggingApp extends App {
   val r3 = program3[KVStoreState].run(r2._1).value
   println(s"Result 3: $r3")
 
+  val prog = for {
+    r1 <- program1[KVStoreState]
+    _ = println(s"Result 1: $r1")
+    r2 <- program2[KVStoreState]
+    _ = println(s"Result 2: $r2")
+    r3 <- program3[KVStoreState]
+    _ = println(s"Result 3: $r3")
+  } yield ()
+
+  val _ = prog.run(Map.empty).value
+
 }

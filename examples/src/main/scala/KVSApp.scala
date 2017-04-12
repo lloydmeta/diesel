@@ -33,9 +33,13 @@ object KVSApp extends App {
 
   implicit object PureKVSInterp extends KVSStateInterpreter
 
-  val r1 = program1[KVStoreState].run(Map.empty).value
-  println(s"Result 1: $r1")
-  val r2 = program2[KVStoreState].run(r1._1).value
-  println(s"Result 2: $r2")
+  val prog = for {
+    r1 <- program1[KVStoreState]
+    _ = println(s"Result 1: $r1")
+    r2 <- program2[KVStoreState]
+    _ = println(s"Result 2: $r2")
+  } yield ()
+
+  val _ = prog.run(Map.empty).value
 
 }

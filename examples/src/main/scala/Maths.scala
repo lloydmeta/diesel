@@ -12,8 +12,7 @@ trait Maths[F[_]] {
 object Maths {
 
   trait KVSStateInterpreter extends Maths[KVStoreState] {
-    private val m   = implicitly[Monad[KVStoreState]]
-    def int(i: Int) = m.pure(i)
+    def int(i: Int) = Monad[KVStoreState].pure(i)
     def add(x: KVStoreState[Int], y: KVStoreState[Int]) =
       for {
         a <- x
