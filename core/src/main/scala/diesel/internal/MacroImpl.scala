@@ -14,8 +14,8 @@ object MacroImpl {
   def expand(self: Tree, defn: Tree): Stat = {
     val opsName: Term.Name = {
       val arg = self match {
-        case q"new $_(${Lit(arg: String)})" => arg
-        case _                              => Defaults.OpsName
+        case q"new $_(${Lit.String(s)})" => s
+        case _                           => Defaults.OpsName
       }
       Term.Name(arg)
     }
@@ -59,7 +59,11 @@ object MacroImpl {
       }
       case other =>
         abort(
-          s"Sorry, the @diesel annotation currently only works on traits and classes, but you passed:\n\n${other.syntax}")
+          s"""
+             |Sorry, the @diesel annotation currently only works on traits and classes, but you passed:
+             |
+             |  ${other.syntax}
+             |""".stripMargin)
     }
   }
 
@@ -82,7 +86,12 @@ object MacroImpl {
         typedContext.build()
       }
       case _ =>
-        abort("Sorry, we only work with one type parameter with one hole")
+        abort(
+          s"""
+            |Sorry, we only work with one type parameter with one hole, but you passed:
+            |
+            |  ${tparams.mkString(", ")}
+            |""".stripMargin)
     }
   }
 

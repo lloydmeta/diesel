@@ -1,71 +1,91 @@
 lazy val theVersion = "0.1.11-SNAPSHOT"
 
-// scala.meta macros are at the moment only supported in 2.11.
-lazy val theScalaVersion = "2.11.8"
+lazy val theScalaVersion  = "2.11.10"
+lazy val scalaVersions = Seq("2.11.10", "2.12.1")
+
+lazy val catsVersion = "0.9.0"
+lazy val scalaTestVersion = "3.2.0-SNAP4"
 
 scalaVersion in ThisBuild := theScalaVersion
 
 lazy val root = Project(id = "diesel-root", base = file("."))
   .settings(
     name := "diesel-root",
+    crossScalaVersions := scalaVersions,
     crossVersion := CrossVersion.binary,
+    commonSettings,
     publishSettings,
     // Do not publish the root project (it just serves as an aggregate)
     publishArtifact := false,
     publishLocal := {}
   )
-  .aggregate(core, cats,scalaz)
+  .aggregate(coreJs, coreJvm, catsJs, catsJvm, scalazJs, scalazJvm,examplesJs, examplesJvm)
 
-lazy val core = project.settings(
-  name := "diesel-core",
-  commonSettings,
-  metaMacroSettings,
-  publishSettings,
-  // A dependency on scala.meta is required to write new-style macros, but not
-  // to expand such macros.  This is similar to how it works for old-style
-  // macros and a dependency on scala.reflect.
-  libraryDependencies ++= commonDependencies
-)
+lazy val core = crossProject
+  .crossType(CrossType.Pure)
+  .settings(
+    name := "diesel-core",
+    commonSettings,
+    metaMacroSettings,
+    publishSettings,
+    testSettings,
+    // A dependency on scala.meta is required to write new-style macros, but not
+    // to expand such macros.  This is similar to how it works for old-style
+    // macros and a dependency on scala.reflect.
+    libraryDependencies ++= Seq(
+      "org.scalameta" %%% "scalameta" % "1.7.0",
+      "org.typelevel" %%% "cats"      % catsVersion % Test
+    )
+  )
+lazy val coreJs  = core.js
+lazy val coreJvm = core.jvm
 
-lazy val cats = project
+lazy val cats = crossProject
+  .crossType(CrossType.Pure)
   .settings(
     name := "diesel-cats",
     commonSettings,
     metaMacroSettings,
     publishSettings,
-    libraryDependencies ++= {
-      commonDependencies :+ "org.typelevel" %% "cats" % "0.9.0"
-    }
+    testSettings,
+    libraryDependencies += "org.typelevel" %%% "cats" % catsVersion
   )
   .dependsOn(core)
+lazy val catsJs  = cats.js
+lazy val catsJvm = cats.jvm
 
-lazy val scalaz = project
+lazy val scalaz = crossProject
+  .crossType(CrossType.Pure)
   .settings(
     name := "diesel-scalaz",
     commonSettings,
     metaMacroSettings,
     publishSettings,
-    libraryDependencies ++= {
-      commonDependencies :+ "org.scalaz" %% "scalaz-core" % "7.2.10"
-
-    }
+    testSettings,
+    libraryDependencies += "org.scalaz" %%% "scalaz-core" % "7.2.10"
   )
   .dependsOn(core)
+lazy val scalazJs  = scalaz.js
+lazy val scalazJvm = scalaz.jvm
 
-lazy val examples = project
+lazy val examples = crossProject
+  .crossType(CrossType.Pure)
   .settings(
     name := "diesel-examples",
     commonSettings,
+    testSettings,
     metaMacroSettings,
+    publishSettings,
     publishArtifact := false,
     publishLocal := {}
   )
   .dependsOn(cats)
+lazy val examplesJs  = examples.js
+lazy val examplesJvm = examples.jvm
 
 lazy val commonSettings: Seq[Def.Setting[_]] = Seq(
   organization := "com.beachape",
   version := theVersion,
-  scalaVersion := theScalaVersion,
   scalacOptions in (Compile, compile) ++= Seq(
     "-deprecation",
     "-encoding",
@@ -84,31 +104,35 @@ lazy val commonSettings: Seq[Def.Setting[_]] = Seq(
     "-Xfuture",
     "-Ywarn-unused-import"
   ),
-  wartremoverErrors in (Compile, compile) ++= Warts.unsafe,
-  doctestWithDependencies := false
+  wartremoverErrors in (Compile, compile) ++= Warts.unsafe
 )
 
-lazy val commonDependencies = Seq(
-  "org.scalameta" %% "scalameta" % "1.6.0",
-  "org.scalatest" %% "scalatest" % "3.2.0-SNAP4" % Test,
-  "org.typelevel" %% "cats" % "0.9.0" % Test
-)
+lazy val testSettings = {
+  Seq(
+    libraryDependencies ++=
+      Seq(
+        "org.scalatest" %%% "scalatest" % scalaTestVersion % Test
+      ),
+    doctestGenTests := {
+      if (isScalaJSProject.value)
+        Seq.empty
+      else
+        doctestGenTests.value
+    },
+    doctestTestFramework := DoctestTestFramework.ScalaTest,
+    doctestWithDependencies := false,
+    scalaJSStage in Test := FastOptStage
+  )
+}
 
 lazy val metaMacroSettings: Seq[Def.Setting[_]] = Seq(
-  // New-style macro annotations are under active development.  As a result, in
-  // this build we'll be referring to snapshot versions of both scala.meta and
-  // macro paradise.
-  resolvers += Resolver.url("scalameta", url("http://dl.bintray.com/scalameta/maven"))(
-    Resolver.ivyStylePatterns),
   // A dependency on macro paradise 3.x is required to both write and expand
   // new-style macros.  This is similar to how it works for old-style macro
   // annotations and a dependency on macro paradise 2.x.
-  addCompilerPlugin("org.scalameta" % "paradise" % "3.0.0-M7" cross CrossVersion.full),
+  addCompilerPlugin("org.scalameta" % "paradise" % "3.0.0-M8" cross CrossVersion.full),
   scalacOptions += "-Xplugin-require:macroparadise",
   // temporary workaround for https://github.com/scalameta/paradise/issues/10
-  scalacOptions in (Compile, console) := Seq(), // macroparadise plugin doesn't work in repl yet.
-  // temporary workaround for https://github.com/scalameta/paradise/issues/55
-  sources in (Compile, doc) := Nil // macroparadise doesn't work with scaladoc yet.
+  scalacOptions in (Compile, console) := Seq() // macroparadise plugin doesn't work in repl yet.
 )
 
 // Settings for publishing to Maven Central
