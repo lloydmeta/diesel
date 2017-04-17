@@ -1,4 +1,4 @@
-# Diesel [![Build Status](https://travis-ci.org/lloydmeta/diesel.svg?branch=master)](https://travis-ci.org/lloydmeta/diesel) [![Maven Central](https://maven-badges.herokuapp.com/maven-central/com.beachape/diesel-core_2.11/badge.svg)](https://maven-badges.herokuapp.com/maven-central/com.beachape/diesel-core_2.11)
+# Diesel [![Build Status](https://travis-ci.org/lloydmeta/diesel.svg?branch=master)](https://travis-ci.org/lloydmeta/diesel) [![Maven Central](https://maven-badges.herokuapp.com/maven-central/com.beachape/diesel-core_2.11/badge.svg)](https://maven-badges.herokuapp.com/maven-central/com.beachape/diesel-core_2.11) [![Scala.js](https://www.scala-js.org/assets/badges/scalajs-0.6.15.svg)](https://www.scala-js.org)
 
 Boilerplate free Tagless Final DSL macro annotation, written in [scala.meta](http://scalameta.org/) for future compatibility and other nice things (e.g. free IDE support, like in IntelliJ).
 
@@ -30,9 +30,9 @@ object DieselDemo extends App {
     def info(s: String): F[Unit]
   }
 
+  def addAndLog[F[_]: Monad: Maths: Logging](x: Int, y: Int): F[Int] = {
   // Use the auto-generated wrapper methods when composing 2+ DSLs using Monad[F]
   import Maths.Ops._, Logging.Ops._
-  def addAndLog[F[_]: Monad: Maths: Logging](x: Int, y: Int): F[Int] = {
     for {
       r <- add(int(x), int(y))[F]
       _ <- info(s"result $r")[F]
