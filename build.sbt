@@ -1,4 +1,4 @@
-lazy val theVersion = "0.1.12"
+lazy val theVersion = "0.1.13-SNAPSHOT"
 
 lazy val theScalaVersion = "2.11.11"
 lazy val scalaVersions   = Seq("2.11.11", "2.12.2")
