@@ -68,7 +68,7 @@ import scala.language.implicitConversions
   */
 object monadic extends MonadicDsl with MonadicF
 
-trait MonadicDsl{
+trait MonadicDsl {
 
   /**
     * Automatic conversion from [[diesel.Dsl]] to Monad.AllOps for a DSL if there is a suitable interpreter in scope
@@ -86,4 +86,3 @@ trait MonadicF {
   implicit def FtoMonadic[F[_]: Monad, A](f: F[A]): Monad.AllOps[F, A] = Monad.ops.toAllMonadOps(f)
 
 }
-

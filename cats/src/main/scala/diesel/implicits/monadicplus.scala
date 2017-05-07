@@ -74,7 +74,8 @@ object monadicplus extends MonadicPlusDsl with MonadicPlusF
 
 trait MonadicPlusDsl {
 
-  implicit def DslToMonadicFilter[Alg[_[_]], A, F[_]: MonadFilter: Alg](dsl: Dsl[Alg, A]): HasWithFilter[F, A] =
+  implicit def DslToMonadicFilter[Alg[_[_]], A, F[_]: MonadFilter: Alg](
+      dsl: Dsl[Alg, A]): HasWithFilter[F, A] =
     new HasWithFilter(MonadFilter.ops.toAllMonadFilterOps(dsl.apply[F]))
 
 }
@@ -85,9 +86,10 @@ trait MonadicPlusF {
     new HasWithFilter(MonadFilter.ops.toAllMonadFilterOps(f))
 }
 
-class HasWithFilter[F[_], A](underlying: MonadFilter.AllOps[F, A]) extends MonadFilter.AllOps[F, A] {
+class HasWithFilter[F[_], A](underlying: MonadFilter.AllOps[F, A])
+    extends MonadFilter.AllOps[F, A] {
 
-  def withFilter(f : A => Boolean) : F[A] = underlying.filter(f)
+  def withFilter(f: A => Boolean): F[A] = underlying.filter(f)
 
   val typeClassInstance: MonadFilter[F] = underlying.typeClassInstance
 

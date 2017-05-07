@@ -41,7 +41,6 @@ object KVSLoggingApp extends App {
     } yield z
   }
 
-
   implicit val combinedInterp = new KVStore.KVSStateInterpreter with Logger.KVSStateInterpreter
   with Maths.KVSStateInterpreter {}
 

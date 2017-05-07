@@ -1,9 +1,9 @@
 lazy val theVersion = "0.1.12-SNAPSHOT"
 
-lazy val theScalaVersion  = "2.11.10"
-lazy val scalaVersions = Seq("2.11.10", "2.12.1")
+lazy val theScalaVersion = "2.11.11"
+lazy val scalaVersions   = Seq("2.11.11", "2.12.2")
 
-lazy val catsVersion = "0.9.0"
+lazy val catsVersion      = "0.9.0"
 lazy val scalaTestVersion = "3.2.0-SNAP4"
 
 scalaVersion in ThisBuild := theScalaVersion
@@ -19,7 +19,7 @@ lazy val root = Project(id = "diesel-root", base = file("."))
     publishArtifact := false,
     publishLocal := {}
   )
-  .aggregate(coreJs, coreJvm, catsJs, catsJvm, scalazJs, scalazJvm,examplesJs, examplesJvm)
+  .aggregate(coreJs, coreJvm, catsJs, catsJvm, scalazJs, scalazJvm, examplesJs, examplesJvm)
 
 lazy val core = crossProject
   .crossType(CrossType.Pure)

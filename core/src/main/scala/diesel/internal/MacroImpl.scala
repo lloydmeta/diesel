@@ -58,8 +58,7 @@ object MacroImpl {
         )
       }
       case other =>
-        abort(
-          s"""
+        abort(s"""
              |Sorry, the @diesel annotation currently only works on traits and classes, but you passed:
              |
              |  ${other.syntax}
@@ -86,8 +85,7 @@ object MacroImpl {
         typedContext.build()
       }
       case _ =>
-        abort(
-          s"""
+        abort(s"""
             |Sorry, we only work with one type parameter with one hole, but you passed:
             |
             |  ${tparams.mkString(", ")}

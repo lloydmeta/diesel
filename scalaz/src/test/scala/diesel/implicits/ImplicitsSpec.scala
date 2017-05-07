@@ -1,7 +1,6 @@
 package diesel.implicits
 
-import scalaz._
-import scalaz.std.AllInstances._
+import scalaz.{Monad, MonadPlus}
 import diesel.diesel
 import org.scalatest.{FunSpec, Matchers}
 
@@ -40,44 +39,46 @@ class ImplicitsSpec extends FunSpec with Matchers {
     import Logging.{Ops => LoggingOps}
 
     // Our combined applicative and maths algebra type
-    type ApMaths[A[_]] = Applicatives[A] with Maths[A]
-    val monadicPlusOp = { (a: Int, b: Int, c: Int) =>
+    def monadicPlusOp[A[_]: MonadPlus: Applicatives: Maths](a: Int, b: Int, c: Int) = {
       import monadicplus._
       for {
-        i <- add(int(a), int(b)).withAlg[ApMaths]
+        i <- add(int(a), int(b))
         if i > 3
-        j <- pure(c).withAlg[ApMaths]
-        k <- add(int(i), int(j)).withAlg[ApMaths]
+        j <- pure(c)
+        k <- add(int(i), int(j))
       } yield k
     }
 
     // Composing a composed DSL...
     // Our combined applicative and maths *and* logging algebras
-    type PRG[A[_]] = ApMaths[A] with Logging[A]
-    val monadicPlusOpWithWarn = { (a: Int, b: Int, c: Int) =>
+    def monadicPlusOpWithWarn[A[_]: MonadPlus: Applicatives: Maths: Logging](a: Int,
+                                                                             b: Int,
+                                                                             c: Int) = {
       import monadicplus._
       for {
-        v <- monadicPlusOp(a, b, c).withAlg[PRG]
-        _ <- LoggingOps.warn(v.toString).withAlg[PRG]
+        v <- monadicPlusOp(a, b, c)
+        _ <- LoggingOps.warn(v.toString)
       } yield v
     }
 
-    val monadicOp = { (a: Int, b: Int, c: Int) =>
+    def monadicOp[F[_]: Monad: Applicatives: Maths: Logging](a: Int, b: Int, c: Int) = {
       import monadic._
       for {
-        i <- add(int(a), int(b)).withAlg[PRG]
-        j <- pure(c).withAlg[PRG]
-        _ <- LoggingOps.info(j.toString).withAlg[PRG]
-        k <- add(int(i), int(j)).withAlg[PRG]
+        i <- add(int(a), int(b))
+        j <- pure(c)
+        _ <- LoggingOps.info(j.toString)
+        k <- add(int(i), int(j))
       } yield k
     }
 
-    val monadicToMonadicPlusOp = { (a: Int, b: Int, c: Int) =>
+    def monadicToMonadicPlusOp[A[_]: MonadPlus: Applicatives: Maths: Logging](a: Int,
+                                                                              b: Int,
+                                                                              c: Int) = {
       import monadicplus._
       for {
-        i <- monadicOp(a, b, c).toPlus
+        i <- monadicOp(a, b, c)
         if i > 0
-        _ <- LoggingOps.info(i.toString).withAlg[PRG]
+        _ <- LoggingOps.info(i.toString)
       } yield i
     }
 
@@ -102,8 +103,8 @@ class ImplicitsSpec extends FunSpec with Matchers {
     describe("using monadic") {
 
       it("should work") {
-        val program1 = monadicOp(1, 2, 3)
-        val program2 = monadicOp(3, 4, 5)
+        def program1[F[_]: Monad] = monadicOp[F](1, 2, 3)
+        def program2[F[_]: Monad] = monadicOp[F](3, 4, 5)
         program1[Option] shouldBe Some(6)
         program1[List] shouldBe List(6)
         program2[Option] shouldBe Some(12)
@@ -114,9 +115,9 @@ class ImplicitsSpec extends FunSpec with Matchers {
     describe("using monadicplus") {
 
       it("should work") {
-        val program1 = monadicPlusOp(1, 2, 3)
-        val program2 = monadicPlusOp(3, 4, 5)
-        val program3 = monadicPlusOpWithWarn(3, 4, 5)
+        def program1[F[_]: MonadPlus] = monadicPlusOp[F](1, 2, 3)
+        def program2[F[_]: MonadPlus] = monadicPlusOp[F](3, 4, 5)
+        def program3[F[_]: MonadPlus] = monadicPlusOpWithWarn[F](3, 4, 5)
         program1[Option] shouldBe None
         program1[List] shouldBe Nil
         program2[Option] shouldBe Some(12)
@@ -128,8 +129,8 @@ class ImplicitsSpec extends FunSpec with Matchers {
 
     describe("converting from monadic to monadicplus") {
       it("should work") {
-        val program1 = monadicToMonadicPlusOp(1, 2, 3)
-        val program2 = monadicToMonadicPlusOp(3, 4, 5)
+        def program1[F[_]: MonadPlus] = monadicToMonadicPlusOp[F](1, 2, 3)
+        def program2[F[_]: MonadPlus] = monadicToMonadicPlusOp[F](3, 4, 5)
         program1[Option] shouldBe Some(6)
         program1[List] shouldBe List(6)
         program2[Option] shouldBe Some(12)
