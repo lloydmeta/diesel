@@ -1,8 +1,9 @@
 package diesel.implicits
 
-import scalaz.Monad
+import scalaz.{Bind, Monad}
 import diesel.Dsl
 
+import scala.language.implicitConversions
 import scala.language.higherKinds
 
 /**
@@ -34,21 +35,20 @@ import scala.language.higherKinds
   * scala> import Maths.Ops._
   * scala> import Applicatives.Ops._
   * scala> import scalaz.Monad
-  * scala> import scalaz.Scalaz._
   *
   * // Our combined algebra type and our program that uses it
-  * scala> type PRG[A[_]] = Applicatives[A] with Maths[A]
-  * scala> val op = { (a: Int, b: Int, c: Int) =>
+  * scala> def op[F[_]: Monad: Maths: Applicatives](a: Int, b: Int, c: Int) = {
   *      |    import monadic._
   *      |    // Note the use of for comprehensions in here
   *      |    for {
-  *      |      i <- add(int(a), int(b)).withAlg[PRG]
-  *      |      j <- pure(c).withAlg[PRG]
-  *      |      k <- add(int(i), int(j)).withAlg[PRG]
+  *      |      i <- add(int(a), int(b))
+  *      |      j <- pure(c)
+  *      |      k <- add(int(i), int(j))
   *      |    } yield k
   *      | }
-
-  * // Write our interpreter
+  *
+  * scala> import scalaz.Scalaz._
+  * // Write our interpreter  *
   * scala> implicit def interp[F[_]](implicit F: Monad[F]) = new Applicatives[F] with Maths[F] {
   *      |    def int(i: Int) = F.pure(i)
   *      |    def add(l: F[Int], r: F[Int]) =
@@ -61,57 +61,38 @@ import scala.language.higherKinds
   *      | }
   *
   * // Now we can use our DSL
-  * scala> val program = op(1, 2, 3)
-  *
-  * scala> program[Option]
+  * scala> op[Option](1, 2, 3)
   * res0: Option[Int] = Some(6)
   * }}}
   */
-object monadic extends monadic
+object monadic extends MonadicDsl with MonadicF
 
-trait monadic {
+trait MonadicDsl {
 
-  implicit class DslToMonadicDsl[Alg[_[_]], A](dsl: Dsl[Alg, A]) extends MonadicDsl[Alg, A] {
-    def apply[F[_]: Monad](implicit interpreter: Alg[F]): F[A] = dsl.apply(interpreter)
-  }
+  /**
+    * Automatic conversion from [[diesel.Dsl]] to Monad.AllOps for a DSL if there is a suitable interpreter in scope
+    */
+  implicit def DslToMonadicOps[Alg[_[_]], A, F[_]: Monad: Alg](
+      dsl: Dsl[Alg, A]): MonadicOps[F, A] = new MonadicOps(dsl.apply[F])
 
 }
 
-trait MonadicDsl[Alg[_[_]], A] { self =>
-
-  import scalaz.Scalaz._
-
-  def apply[F[_]: Monad](implicit interpreter: Alg[F]): F[A]
-
-  def map[B](f: A => B): MonadicDsl[Alg, B] = new MonadicDsl[Alg, B] {
-    def apply[F[_]: Monad](implicit interpreter: Alg[F]): F[B] = {
-      self[F].map(f)
-    }
-  }
+trait MonadicF {
 
   /**
-    * Combines Alg with AlgB
-    *
-    * Useful for flatmapping and for-comprehensions in general
+    * Automatic conversion from a F[_] to Monad.AllOps for a DSL if there is a suitable interpreter in scope
     */
-  def withAlg[AlgB[_[_]]]
-    : MonadicDsl[({ type Combined[X[_]] = Alg[X] with AlgB[X] })#Combined, A] =
-    new MonadicDsl[({ type Combined[X[_]] = Alg[X] with AlgB[X] })#Combined, A] {
-      def apply[F[_]: Monad](implicit interpreter: Alg[F] with AlgB[F]): F[A] = {
-        self[F]
-      }
-    }
+  implicit def FtoMonadic[F[_]: Monad, A](f: F[A]): MonadicOps[F, A] = new MonadicOps(f)
 
-  def flatMap[B](f: A => MonadicDsl[Alg, B]): MonadicDsl[Alg, B] =
-    new MonadicDsl[Alg, B] {
-      def apply[F[_]: Monad](implicit interpreter: Alg[F]): F[B] = {
-        self[F].flatMap(r => f(r)[F])
-      }
-    }
+}
 
-  /**
-    * Converts to a MonadicPlusDsl so that you can do filtering
-    */
-  def toPlus: MonadicPlusDsl[Alg, A] = new MonadicDslToMonadicPlusDsl(self)
+/**
+  * Enrichment class for Monadic F[_]
+  */
+class MonadicOps[F[_]: Monad, A] private[implicits] (m: F[A]) {
+
+  def map[B](f: A => B): F[B] = Monad[F].map(m)(f)
+
+  def flatMap[B](f: A => F[B]): F[B] = Bind[F].bind(m)(f)
 
 }

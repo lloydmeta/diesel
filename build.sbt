@@ -1,9 +1,9 @@
 lazy val theVersion = "0.1.12-SNAPSHOT"
 
-lazy val theScalaVersion  = "2.11.10"
-lazy val scalaVersions = Seq("2.11.10", "2.12.1")
+lazy val theScalaVersion = "2.11.11"
+lazy val scalaVersions   = Seq("2.11.11", "2.12.2")
 
-lazy val catsVersion = "0.9.0"
+lazy val catsVersion      = "0.9.0"
 lazy val scalaTestVersion = "3.2.0-SNAP4"
 
 scalaVersion in ThisBuild := theScalaVersion
@@ -19,7 +19,7 @@ lazy val root = Project(id = "diesel-root", base = file("."))
     publishArtifact := false,
     publishLocal := {}
   )
-  .aggregate(coreJs, coreJvm, catsJs, catsJvm, scalazJs, scalazJvm,examplesJs, examplesJvm)
+  .aggregate(coreJs, coreJvm, catsJs, catsJvm, scalazJs, scalazJvm, examplesJs, examplesJvm)
 
 lazy val core = crossProject
   .crossType(CrossType.Pure)
@@ -34,7 +34,7 @@ lazy val core = crossProject
     // macros and a dependency on scala.reflect.
     libraryDependencies ++= Seq(
       "org.scalameta" %%% "scalameta" % "1.7.0",
-      "org.typelevel" %%% "cats"      % catsVersion % Test
+      "org.typelevel" %%% "cats-core" % catsVersion % Test
     )
   )
 lazy val coreJs  = core.js
@@ -48,7 +48,7 @@ lazy val cats = crossProject
     metaMacroSettings,
     publishSettings,
     testSettings,
-    libraryDependencies += "org.typelevel" %%% "cats" % catsVersion
+    libraryDependencies += "org.typelevel" %%% "cats-core" % catsVersion
   )
   .dependsOn(core)
 lazy val catsJs  = cats.js
@@ -62,7 +62,7 @@ lazy val scalaz = crossProject
     metaMacroSettings,
     publishSettings,
     testSettings,
-    libraryDependencies += "org.scalaz" %%% "scalaz-core" % "7.2.10"
+    libraryDependencies += "org.scalaz" %%% "scalaz-core" % "7.2.12"
   )
   .dependsOn(core)
 lazy val scalazJs  = scalaz.js

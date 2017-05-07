@@ -1,6 +1,6 @@
 package diesel.implicits
 
-import cats.{Applicative, Monad, MonadFilter}
+import cats.{Monad, MonadFilter}
 import diesel.diesel
 import org.scalatest.{FunSpec, Matchers}
 
@@ -8,78 +8,82 @@ import scala.language.higherKinds
 
 class ImplicitsSpec extends FunSpec with Matchers {
 
+  @diesel
+  trait Maths[G[_]] {
+    def int(i: Int): G[Int]
+    def add(l: G[Int], r: G[Int]): G[Int]
+  }
+
+  @diesel
+  trait Applicatives[F[_]] {
+    def map2[A, B, C](fa: F[A], fb: F[B])(f: (A, B) => C): F[C]
+    def pure[A](a: A): F[A]
+  }
+
+  @diesel
+  trait Logging[F[_]] {
+
+    def info(s: String): F[Unit]
+    def warn(s: String): F[Unit]
+    def error(s: String): F[Unit]
+
+  }
+
+  import Maths.Ops._
+  import Applicatives.Ops._
+  import Logging.{Ops => LoggingOps}
+
+  // Our combined applicative and maths algebra type
+  def monadicPlusOp[F[_]: MonadFilter: Maths: Applicatives](a: Int, b: Int, c: Int) = {
+    import monadicplus._
+    for {
+      i <- add(int(a), int(b))
+      if i > 3
+      j <- pure(c)
+      k <- add(int(i), int(j))
+    } yield k
+  }
+
+  // Composing a composed DSL...
+  // Our combined applicative and maths *and* logging algebras
+  def monadicPlusOpWithWarn[F[_]: MonadFilter: Maths: Applicatives: Logging](a: Int,
+                                                                             b: Int,
+                                                                             c: Int) = {
+    import monadicplus._
+    for {
+      v <- monadicPlusOp(a, b, c)
+      _ <- LoggingOps.warn(v.toString)
+    } yield v
+  }
+
+  def monadicOp[F[_]: Monad: Maths: Applicatives: Logging](a: Int, b: Int, c: Int) = {
+    import monadic._
+    for {
+      i <- add(int(a), int(b))
+      j <- pure(c)
+      _ <- LoggingOps.info(j.toString)
+      k <- add(int(i), int(j))
+    } yield k
+  }
+
+  def monadicToMonadicPlusOp[F[_]: MonadFilter: Maths: Applicatives: Logging](a: Int,
+                                                                              b: Int,
+                                                                              c: Int) = {
+    import monadicplus._
+    for {
+      i <- monadicOp(a, b, c)
+      if i > 0
+      _ <- LoggingOps.info(i.toString)
+    } yield i
+  }
+
   describe("composing languages using the implicits") {
 
-    @diesel
-    trait Maths[G[_]] {
-      def int(i: Int): G[Int]
-      def add(l: G[Int], r: G[Int]): G[Int]
-    }
-
-    @diesel
-    trait Applicatives[F[_]] {
-      def map2[A, B, C](fa: F[A], fb: F[B])(f: (A, B) => C): F[C]
-      def pure[A](a: A): F[A]
-    }
-
-    @diesel
-    trait Logging[F[_]] {
-
-      def info(s: String): F[Unit]
-      def warn(s: String): F[Unit]
-      def error(s: String): F[Unit]
-
-    }
-
-    import Maths.Ops._
-    import Applicatives.Ops._
-    import Logging.{Ops => LoggingOps}
-
-    // Our combined applicative and maths algebra type
-    type ApMaths[A[_]] = Applicatives[A] with Maths[A]
-    val monadicPlusOp = { (a: Int, b: Int, c: Int) =>
-      import monadicplus._
-      for {
-        i <- add(int(a), int(b)).withAlg[ApMaths]
-        if i > 3
-        j <- pure(c).withAlg[ApMaths]
-        k <- add(int(i), int(j)).withAlg[ApMaths]
-      } yield k
-    }
-
-    // Composing a composed DSL...
-    // Our combined applicative and maths *and* logging algebras
-    type PRG[A[_]] = ApMaths[A] with Logging[A]
-    val monadicPlusOpWithWarn = { (a: Int, b: Int, c: Int) =>
-      import monadicplus._
-      for {
-        v <- monadicPlusOp(a, b, c).withAlg[PRG]
-        _ <- LoggingOps.warn(v.toString).withAlg[PRG]
-      } yield v
-    }
-
-    val monadicOp = { (a: Int, b: Int, c: Int) =>
-      import monadic._
-      for {
-        i <- add(int(a), int(b)).withAlg[PRG]
-        j <- pure(c).withAlg[PRG]
-        _ <- LoggingOps.info(j.toString).withAlg[PRG]
-        k <- add(int(i), int(j)).withAlg[PRG]
-      } yield k
-    }
-
-    val monadicToMonadicPlusOp = { (a: Int, b: Int, c: Int) =>
-      import monadicplus._
-      for {
-        i <- monadicOp(a, b, c).toPlus
-        if i > 0
-        _ <- LoggingOps.info(i.toString).withAlg[PRG]
-      } yield i
-    }
-
     import cats.implicits._
+
     implicit def interp[F[_]](implicit F: Monad[F]) =
       new Applicatives[F] with Maths[F] with Logging[F] {
+        import cats.implicits._
         def int(i: Int) = F.pure(i)
         def add(l: F[Int], r: F[Int]) =
           for {
@@ -98,8 +102,8 @@ class ImplicitsSpec extends FunSpec with Matchers {
     describe("using monadic") {
 
       it("should work") {
-        val program1 = monadicOp(1, 2, 3)
-        val program2 = monadicOp(3, 4, 5)
+        def program1[F[_]: Monad] = monadicOp[F](1, 2, 3)
+        def program2[F[_]: Monad] = monadicOp[F](3, 4, 5)
         program1[Option] shouldBe Some(6)
         program1[List] shouldBe List(6)
         program2[Option] shouldBe Some(12)
@@ -110,9 +114,9 @@ class ImplicitsSpec extends FunSpec with Matchers {
     describe("using monadicplus") {
 
       it("should work") {
-        val program1 = monadicPlusOp(1, 2, 3)
-        val program2 = monadicPlusOp(3, 4, 5)
-        val program3 = monadicPlusOpWithWarn(3, 4, 5)
+        def program1[F[_]: MonadFilter] = monadicPlusOp[F](1, 2, 3)
+        def program2[F[_]: MonadFilter] = monadicPlusOp[F](3, 4, 5)
+        def program3[F[_]: MonadFilter] = monadicPlusOpWithWarn[F](3, 4, 5)
         program1[Option] shouldBe None
         program1[List] shouldBe Nil
         program2[Option] shouldBe Some(12)
@@ -124,8 +128,8 @@ class ImplicitsSpec extends FunSpec with Matchers {
 
     describe("converting from monadic to monadicplus") {
       it("should work") {
-        val program1 = monadicToMonadicPlusOp(1, 2, 3)
-        val program2 = monadicToMonadicPlusOp(3, 4, 5)
+        def program1[F[_]: MonadFilter] = monadicToMonadicPlusOp[F](1, 2, 3)
+        def program2[F[_]: MonadFilter] = monadicToMonadicPlusOp[F](3, 4, 5)
         program1[Option] shouldBe Some(6)
         program1[List] shouldBe List(6)
         program2[Option] shouldBe Some(12)

@@ -34,106 +34,65 @@ import scala.language.higherKinds
   * scala> import Wrapper._
   * scala> import Maths.Ops._
   * scala> import Applicatives.Ops._
-  * scala> import scalaz.Monad
-  * scala> import scalaz.Scalaz._
+  * scala> import scalaz.MonadPlus
   *
   * // Our combined algebra type and our program that uses it
-  * scala> type PRG[A[_]] = Applicatives[A] with Maths[A]
-  * scala> val op = { (a: Int, b: Int, c: Int) =>
+  * scala> def op[F[_]: MonadPlus: Maths: Applicatives](a: Int, b: Int, c: Int) = {
   *      |    import monadicplus._
   *      |    // Note the use of for comprehensions in here
   *      |    for {
-  *      |      i <- add(int(a), int(b)).withAlg[PRG]
+  *      |      i <- add(int(a), int(b))
   *      |      if i > 3
-  *      |      j <- pure(c).withAlg[PRG]
-  *      |      k <- add(int(i), int(j)).withAlg[PRG]
+  *      |      j <- pure(c)
+  *      |      k <- add(int(i), int(j))
   *      |    } yield k
   *      | }
-
+  *
+  * scala> import scalaz.Scalaz._
   * // Write our interpreter
-  * scala> implicit def interp[F[_]](implicit F: Monad[F]) = new Applicatives[F] with Maths[F] {
-  *      |    def int(i: Int) = F.pure(i)
+  * scala> implicit def interp[F[_]: MonadPlus] = new Applicatives[F] with Maths[F] {
+  *      |    def int(i: Int) = MonadPlus[F].pure(i)
   *      |    def add(l: F[Int], r: F[Int]) =
   *      |      for {
   *      |        x <- l
   *      |        y <- r
   *      |      } yield x + y
-  *      |    def map2[A, B, C](fa: F[A], fb: F[B])(f: (A, B) => C): F[C] = F.apply2(fa, fb)(f)
-  *      |    def pure[A](a: A): F[A] = F.pure(a)
+  *      |    def map2[A, B, C](fa: F[A], fb: F[B])(f: (A, B) => C): F[C] = MonadPlus[F].apply2(fa, fb)(f)
+  *      |    def pure[A](a: A): F[A] = MonadPlus[F].pure(a)
   *      | }
   *
   * // Now we can use our DSL
-  * scala> val program1 = op(1, 2, 3)
-  * scala> val program2 = op(4, 5, 6)
-  *
-  * scala> program1[Option]
+  * scala> op[Option](1, 2, 3)
   * res0: Option[Int] = None
   *
-  * scala> program2[Option]
+  * scala> op[Option](4, 5, 6)
   * res1: Option[Int] = Some(15)
   * }}}
   */
-object monadicplus extends monadicplus
+object monadicplus extends MonadicPlusDsl with MonadicPlusF
 
-trait monadicplus {
+trait MonadicPlusDsl {
 
-  implicit class DslToMonadicPlusDsl[Alg[_[_]], A](dsl: Dsl[Alg, A])
-      extends MonadicPlusDsl[Alg, A] {
-    def apply[F[_]: MonadPlus](implicit interpreter: Alg[F]): F[A] = dsl[F]
-  }
+  implicit def DslToMonadicPlusDsl[Alg[_[_]], A, F[_]: MonadPlus: Alg](
+      dsl: Dsl[Alg, A]): MonadicPlusOps[F, A] = new MonadicPlusOps(dsl.apply[F])
 
 }
 
-class MonadicDslToMonadicPlusDsl[Alg[_[_]], A](dsl: MonadicDsl[Alg, A])
-    extends MonadicPlusDsl[Alg, A] {
-  def apply[F[_]: MonadPlus](implicit interpreter: Alg[F]): F[A] = dsl[F]
-}
-
-/**
-  * Allows for the full span of for-comprehension options to be used, including
-  * filtering in between.
-  *
-  * However, requires there to be a MonadFilter instance for the F[_] that your eventual
-  * interpreter will use.
-  */
-trait MonadicPlusDsl[Alg[_[_]], A] { self =>
-
-  import scalaz.Scalaz._
-
-  def apply[F[_]: MonadPlus](implicit interpreter: Alg[F]): F[A]
-
-  def map[B](f: A => B): MonadicPlusDsl[Alg, B] = new MonadicPlusDsl[Alg, B] {
-    def apply[F[_]: MonadPlus](implicit interpreter: Alg[F]): F[B] = {
-      self[F].map(f)
-    }
-  }
+trait MonadicPlusF {
 
   /**
-    * Combines Alg with AlgB
-    *
-    * Useful for flatmapping and for-comprehensions in general
+    * Automatic conversion from a F[_] to Monad.AllOps for a DSL if there is a suitable interpreter in scope
     */
-  def withAlg[AlgB[_[_]]]
-    : MonadicPlusDsl[({ type Combined[X[_]] = Alg[X] with AlgB[X] })#Combined, A] =
-    new MonadicPlusDsl[({ type Combined[X[_]] = Alg[X] with AlgB[X] })#Combined, A] {
-      def apply[F[_]: MonadPlus](implicit interpreter: Alg[F] with AlgB[F]): F[A] = {
-        self[F]
-      }
-    }
+  implicit def FtoMonadicPlus[F[_]: MonadPlus, A](f: F[A]): MonadicPlusOps[F, A] =
+    new MonadicPlusOps(f)
 
-  def flatMap[B](f: A => MonadicPlusDsl[Alg, B]): MonadicPlusDsl[Alg, B] =
-    new MonadicPlusDsl[Alg, B] {
-      def apply[F[_]: MonadPlus](implicit interpreter: Alg[F]): F[B] = {
-        self[F].flatMap(r => f(r)[F])
-      }
-    }
+}
 
-  def filter(f: A => Boolean): MonadicPlusDsl[Alg, A] = new MonadicPlusDsl[Alg, A] {
-    def apply[F[_]: MonadPlus](implicit interpreter: Alg[F]): F[A] = {
-      implicitly[MonadPlus[F]].filter(self[F])(f)
-    }
-  }
+final class MonadicPlusOps[F[_]: MonadPlus, A] private[implicits] (m: F[A])
+    extends MonadicOps[F, A](m) {
 
-  def withFilter(f: A => Boolean): MonadicPlusDsl[Alg, A] = filter(f)
+  def filter(f: A => Boolean): F[A] = MonadPlus[F].filter(m)(f)
+
+  def withFilter(f: A => Boolean): F[A] = filter(f)
 
 }

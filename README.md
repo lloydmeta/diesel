@@ -125,8 +125,8 @@ scalacOptions += "-Xplugin-require:macroparadise"
 
 ```
 
-There are also 2 sub-projects that provide implicit conversions from Dsl to MonadicDsl so that you can compose multiple
-DSLs *without* having to use defs that take implicit Monad and Interpreter parameters. 
+There are also 2 sub-projects that provide implicit conversions from Dsl to Monad so that you can compose multiple
+DSLs *without* having to write `[F]` everywhere. 
 
 For an example of how this looks, take a look [here](https://github.com/lloydmeta/diesel/blob/master/examples/src/main/scala/KVSLoggingApp.scala#L43-L55)
 

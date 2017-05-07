@@ -1,6 +1,6 @@
 import KVStore.KVStoreState
 import cats.Monad
-import cats.implicits._
+import diesel.implicits.monadic._
 
 import scala.language.higherKinds
 
@@ -21,20 +21,20 @@ object FibApp extends App {
       case 1           => Monad[F].pure(1)
       case _ => {
         for {
-          fromCache <- get[Int](i.toString)[F]
+          fromCache <- get[Int](i.toString)
           r <- fromCache match {
             case None =>
               for {
-                _ <- warn(s"Not found in cache, trying to find fib of ${i - 1} and ${i - 2}")[F]
-                a <- cachedFib[F](i - 1) /* Recursion! */
-                b <- cachedFib[F](i - 2)
-                s <- add(int(a), int(b))[F]
-                _ <- info(s"Calculated fib of $i to be $s, caching")[F]
-                _ <- put(i.toString, s)[F]
+                _ <- warn(s"Not found in cache, trying to find fib of ${i - 1} and ${i - 2}")
+                a <- cachedFib(i - 1) /* Recursion! */
+                b <- cachedFib(i - 2)
+                s <- add(int(a), int(b))
+                _ <- info(s"Calculated fib of $i to be $s, caching")
+                _ <- put(i.toString, s)
               } yield s
             case Some(f) =>
               for {
-                _ <- info(s"Found fib of $i in cache: $f")[F]
+                _ <- info(s"Found fib of $i in cache: $f")
               } yield f
           }
         } yield r
