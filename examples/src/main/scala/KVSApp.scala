@@ -1,31 +1,19 @@
 import cats.Monad
-
 import scala.language.higherKinds
 
 @SuppressWarnings(Array("org.wartremover.warts.Any"))
 object KVSApp extends App {
 
   import KVStore._, Ops._
-  import cats.implicits._
+
+  import diesel.implicits.monadic._
 
   // This is one way to compose a program
-  def program1[F[_]: Monad: KVStore] = {
+  def program1[F[_]: Monad: KVStore]: F[Option[Int]] = {
     for {
-      _ <- put("wild-cats", 2)[F]
-      _ <- update[Int, Int]("wild-cats", _ + 12)[F]
-      _ <- put("tame-cats", 5)[F]
-      n <- get[Int]("wild-cats")[F]
-      _ <- delete("tame-cats")[F]
-    } yield n
-  }
-
-  // Another way (note that we don't need an implicit interpreter!) and the program is a value
-  val program2 = {
-    import diesel.implicits.monadic._
-    for {
-      _ <- put("wild-cats", 90)
-      _ <- update[Int, Int]("wild-cats", _ + 10)
-      _ <- put("tame-cats", 55)
+      _ <- put("wild-cats", 2)
+      _ <- update[Int, Int]("wild-cats", _ + 12)
+      _ <- put("tame-cats", 5)
       n <- get[Int]("wild-cats")
       _ <- delete("tame-cats")
     } yield n
@@ -36,7 +24,7 @@ object KVSApp extends App {
   val prog = for {
     r1 <- program1[KVStoreState]
     _ = println(s"Result 1: $r1")
-    r2 <- program2[KVStoreState]
+    r2 <- program1[KVStoreState]
     _ = println(s"Result 2: $r2")
   } yield ()
 
