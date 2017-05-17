@@ -32,7 +32,7 @@ object KVStore {
 
   type KVStoreState[A] = State[Map[String, Any], A]
 
-  trait KVSStateInterpreter extends KVStore[KVStoreState] {
+  implicit object KVSStateInterpreter extends KVStore[KVStoreState] {
 
     def put[A](k: String, o: A): KVStoreState[Unit] = State.modify(_.updated(k, o))
 

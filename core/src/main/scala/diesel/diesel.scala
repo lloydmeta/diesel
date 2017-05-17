@@ -60,7 +60,7 @@ class diesel(dslName: String = Defaults.DslName) extends scala.annotation.Static
 
   inline def apply(defn: Any): Any = meta {
     val r = internal.MacroImpl.expand(this, defn)
-    println(r.syntax)
+//    println(r.syntax)
     r
   }
 

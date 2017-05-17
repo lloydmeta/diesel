@@ -7,16 +7,16 @@ Boilerplate free Tagless Final DSL macro annotation, written in [scala.meta](htt
 This plugin provides an annotation that cuts out the boilerplate associated with writing composable Tagless 
 Final DSLs.
 
-The DSL wrapper methods are generated in the annotated trait's companion object, inside an object called `Ops` 
+The DSL wrapper methods are generated in the annotated trait's companion object, inside an object called `Dsl` 
 (customisable by passing a name to the annotation as an argument). These are useful when you need to compose 
 multiple DSLs in the context of `F[_]`.
 
 Example:
 
 ```scala
-import cats._, implicits._
-import diesel.diesel
-object DieselDemo extends App {
+import diesel._, cats._, cats.implicits._
+
+object DieselDemo  {
 
   // Declare your DSL
   @diesel
@@ -26,27 +26,33 @@ object DieselDemo extends App {
   }
 
   @diesel
-  trait Logging[F[_]] {
+  trait Logger[F[_]] {
     def info(s: String): F[Unit]
   }
 
-  def addAndLog[F[_]: Monad: Maths: Logging](x: Int, y: Int): F[Int] = {
-  // Use the auto-generated wrapper methods when composing 2+ DSLs using Monad[F]
-  import Maths.Ops._, Logging.Ops._
+  // Use the Dsl wrapping methods
+  import Maths.Dsl._, Logger.Dsl._
+  def addAndLog[F[_]: Monad: Maths: Logger](x: Int, y: Int): F[Int] = {
     for {
-      r <- add(int(x), int(y))[F]
-      _ <- info(s"result $r")[F]
+      r <- Maths.add(Maths.int(x), Maths.int(y))
+      _ <- Logger.info(s"result $r")
     } yield r
   }
 
-  // Write an interpreter
-  implicit val interp = new Maths[Id] with Logging[Id] {
-    def int(a: Int)                 = a
-    def add(a: Id[Int], b: Id[Int]) = a + b
-    def info(msg: String)           = println(msg)
-  }
+  def main(args: Array[String]): Unit = {
 
-  val _ = addAndLog[Id](1, 2)
+    // Wire in our interpreters
+    implicit val mathsInterp = new Maths[Id] {
+      def int(a: Int)                 = a
+      def add(a: Id[Int], b: Id[Int]) = a + b
+    }
+    implicit val loggingInterp = new Logger[Id] {
+      def info(msg: String)           = println(msg)
+    }
+
+    addAndLog[Id](1, 2)
+    ()
+  }
 
 }
 /*
@@ -125,19 +131,6 @@ scalacOptions += "-Xplugin-require:macroparadise"
 
 ```
 
-There are also 2 sub-projects that provide implicit conversions from Dsl to Monad so that you can compose multiple
-DSLs *without* having to write `[F]` everywhere. 
-
-For an example of how this looks, take a look [here](https://github.com/lloydmeta/diesel/blob/master/examples/src/main/scala/KVSLoggingApp.scala#L43-L55)
-
-```scala
-// Choose one or the other:
-
-// for cats
-libraryDependencies += "com.beachape" %% "diesel-cats" % s"$latest_version"
-// for scalaz  
-libraryDependencies += "com.beachape" %% "diesel-scalaz" % s"$latest_version"
-```
 
 # Credit
 

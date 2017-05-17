@@ -1,6 +1,5 @@
-import KVStore.KVStoreState
 import cats.Monad
-import diesel.implicits.monadic._
+import cats.implicits._
 
 import scala.language.higherKinds
 
@@ -14,27 +13,27 @@ object FibApp extends App {
     */
   def cachedFib[F[_]: Monad: KVStore: Maths: Logger](i: Int): F[Int] = {
     // Import the auto-generated methods
-    import KVStore.Ops._, Logger.Ops._, Maths.Ops._
+    import KVStore.Dsl._, Logger.Dsl._, Maths.Dsl._
 
     i match {
       case _ if i <= 0 => Monad[F].pure(0)
       case 1           => Monad[F].pure(1)
       case _ => {
         for {
-          fromCache <- get[Int](i.toString)
+          fromCache <- KVStore.get[Int](i.toString)
           r <- fromCache match {
             case None =>
               for {
-                _ <- warn(s"Not found in cache, trying to find fib of ${i - 1} and ${i - 2}")
-                a <- cachedFib(i - 1) /* Recursion! */
-                b <- cachedFib(i - 2)
-                s <- add(int(a), int(b))
-                _ <- info(s"Calculated fib of $i to be $s, caching")
-                _ <- put(i.toString, s)
+                _ <- Logger.warn(s"Not found in cache, trying to find fib of ${i - 1} and ${i - 2}")
+                a <- cachedFib[F](i - 1) /* Recursion! */
+                b <- cachedFib[F](i - 2)
+                s <- Maths.add(Maths.int(a), Maths.int(b))
+                _ <- Logger.info(s"Calculated fib of $i to be $s, caching")
+                _ <- KVStore.put(i.toString, s)
               } yield s
             case Some(f) =>
               for {
-                _ <- info(s"Found fib of $i in cache: $f")
+                _ <- Logger.info(s"Found fib of $i in cache: $f")
               } yield f
           }
         } yield r
@@ -43,9 +42,7 @@ object FibApp extends App {
 
   }
 
-  implicit val kvsStoreInterp = new KVStore.KVSStateInterpreter {}
-  implicit val mathsInterp    = new Maths.KVSStateInterpreter   {}
-
+  import KVStore.KVStoreState
   val prog = for {
     r1 <- cachedFib[KVStoreState](10)
     _ = println(r1)
