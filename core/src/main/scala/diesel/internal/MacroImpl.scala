@@ -19,12 +19,14 @@ object MacroImpl {
       case SupportedAnnottee(extracted) => {
         val (mods, tname, tparams, template) =
           (extracted.mods, extracted.tname, extracted.tparams, extracted.template)
-        val TaglessFinalTrees(applyMethod, opsObject) =
+        val TaglessFinalTrees(algebraAlias, singletonAlias, applyMethod, opsObject) =
           buildTrees(tname, opsName, tparams, template)
         Term.Block(
           Seq(
             extracted.underlying,
             q"""..${objectModsOnly(mods)} object ${Term.Name(tname.value)} {
+               $algebraAlias
+               $singletonAlias
                $applyMethod
                $opsObject
            }
@@ -41,10 +43,11 @@ object MacroImpl {
           ) => {
         val (mods, tname, tparams, template) =
           (extracted.mods, extracted.tname, extracted.tparams, extracted.template)
-        val TaglessFinalTrees(applyMethod, opsObject) =
+        val TaglessFinalTrees(algebraAlias, singletonAlias, applyMethod, opsObject) =
           buildTrees(tname, opsName, tparams, template)
         val templateStats: Seq[Stat] =
-          applyMethod +: opsObject +: companion.templ.stats.getOrElse(Nil)
+          Seq(algebraAlias, singletonAlias, applyMethod, opsObject) ++ companion.templ.stats
+            .getOrElse(Nil)
         val newObjTemplate = companion.templ.copy(stats = Some(templateStats))
         Term.Block(
           Seq(
@@ -89,39 +92,52 @@ object MacroImpl {
     }
   }
 
+  // Constants that we reuse when aliasing types
+  private val algebraAliasName   = Type.Name("AlgebraTypeAlias")
+  private val singletonAliasName = Type.Name("SingletonTypeAlias")
+  private val singletonTypeAlias = q"type $singletonAliasName = this.type"
+
   private class TaglessFinalBuilder(algebraName: Type.Name,
                                     opsObjectName: Term.Name,
                                     tparam: Type.Param,
                                     template: Template) {
 
-    val algebraBoundTParam = tparam.copy(cbounds = Seq(algebraName)) // We drop all existing CBounds
-    val tparamName         = tparam.name.value
+    private val tparamName      = tparam.name.value
+    private val tparamAsType    = Type.fresh().copy(tparamName)
+    private val boundlessTparam = tparam.copy(cbounds = Nil)
 
-    val tparamAsType    = Type.fresh().copy(tparamName)
-    val interpreterType = Type.Apply(algebraName, Seq(tparamAsType))
+    private val interpreterType = Type.Apply(algebraName, Seq(tparamAsType))
 
-    val singletonToInterpMethName =
+    // Aliasing our types in case the user decides to get creative with more types/objects
+    // inside their companion
+    private val algebraTypeAlias          = q"type $algebraAliasName[$boundlessTparam] = $interpreterType"
+    private val aliasedInterpreterType    = Type.Apply(algebraAliasName, Seq(tparamAsType))
+    private val aliasedAlgebraBoundTParam = tparam.copy(cbounds = Seq(algebraAliasName))
+
+    private val singletonToInterpMethName =
       Term.Name(s"singleton${algebraName.value}To${opsObjectName.value}")
-    val singletonType = Type.Name(s"${algebraName.value}.type")
 
     def build(): TaglessFinalTrees = {
 
       val applyMethod =
-        q"def apply[$algebraBoundTParam]: $interpreterType = ${implicitlyTree(interpreterType)}"
+        q"def apply[$aliasedAlgebraBoundTParam]: $aliasedInterpreterType = ${implicitlyTree(aliasedInterpreterType)}"
 
       val toOpsMethod =
-        q"implicit def $singletonToInterpMethName[$algebraBoundTParam](o: $singletonType): $interpreterType = ${implicitlyTree(interpreterType)}"
+        q"implicit def $singletonToInterpMethName[$aliasedAlgebraBoundTParam](o: $singletonAliasName): $aliasedInterpreterType = ${implicitlyTree(aliasedInterpreterType)}"
 
       val opsWrapper =
         q"""object $opsObjectName {
            $toOpsMethod
            }"""
-      TaglessFinalTrees(applyMethod, opsWrapper)
+      TaglessFinalTrees(algebraTypeAlias, singletonTypeAlias, applyMethod, opsWrapper)
     }
 
-    def implicitlyTree(t: Type): Term.ApplyType = q"_root_.scala.Predef.implicitly[$t]"
+    private def implicitlyTree(t: Type): Term.ApplyType = q"_root_.scala.Predef.implicitly[$t]"
   }
 
-  private case class TaglessFinalTrees(applyMethod: Defn.Def, opsObject: Defn.Object)
+  private final case class TaglessFinalTrees(algebraTypeAlias: Defn.Type,
+                                             singletonTypeAlias: Defn.Type,
+                                             applyMethod: Defn.Def,
+                                             opsObject: Defn.Object)
 
 }

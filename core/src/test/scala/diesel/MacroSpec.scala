@@ -179,7 +179,6 @@ class MacroSpec extends FunSpec with Matchers {
       } yield s
     }
 
-
     implicit val MathsIdInterp = new Maths[Id] {
       def add(l: Int, r: Int) = l + r
     }

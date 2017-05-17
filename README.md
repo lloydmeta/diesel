@@ -79,32 +79,26 @@ trait Maths[F[_]] {
 }
 ```
 
-is expanded into
+is expanded approximately into
 
 ```scala
 // Your algebra. Implement by providing a concrete F and you have your interpreter
 trait Maths[F[_]] {
-  def int(i: Int): F[Int]
-
-  def add(l: F[Int], r: F[Int]): F[Int]
+    def int(i: Int): F[Int]
+    def add(l: F[Int], r: F[Int]): F[Int]
 }
 
+// Helper methods will be added to the algebra's companion object (one will be created if there isn't one yet)
 object Maths {
 
-  import diesel.Dsl
-
-  // Wrapper methods that allow you to delay deciding on a concrete F, and thus
-  // are composable with other DSLs
-  object Ops {
-    def int(i: Int): Dsl[Maths, Int] = new Dsl[Maths, Int] {
-      def apply[F[_]](implicit I: Maths[F]): F[Int] = I.int(i)
-  }
-
-    def add(l: Dsl[Maths, Int], r: Dsl[Maths, Int]): Dsl[Maths, Int] = new Dsl[Maths, Int] {
-      def apply[F[_]](implicit I: Maths[F]): F[Int] = I.add(l.apply[F], r.apply[F])
-    }
+  def apply[F[_]](implicit m: Maths[F]): Maths[F] = m
+  
+  // In charge of aliasing your singleton Maths object to an in-scope Maths[F] :) 
+  object Dsl { 
+    implicit def toDsl[F[_]](o: Maths.type)(implicit m: Maths[F]): Maths[F] = m 
   }
 }
+
 ```
 
 ## Sbt
@@ -125,7 +119,7 @@ resolvers += Resolver.url(
 // new-style macros.  This is similar to how it works for old-style macro
 // annotations and a dependency on macro paradise 2.x.
 addCompilerPlugin(
-  "org.scalameta" % "paradise" % "3.0.0-M7" cross CrossVersion.full)
+  "org.scalameta" % "paradise" % "3.0.0-M8" cross CrossVersion.full)
 
 scalacOptions += "-Xplugin-require:macroparadise"
 
