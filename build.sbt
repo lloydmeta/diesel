@@ -1,4 +1,4 @@
-lazy val theVersion = "0.1.13-SNAPSHOT"
+lazy val theVersion = "0.2.0-SNAPSHOT"
 
 lazy val theScalaVersion = "2.11.11"
 lazy val scalaVersions   = Seq("2.11.11", "2.12.2")
@@ -19,7 +19,7 @@ lazy val root = Project(id = "diesel-root", base = file("."))
     publishArtifact := false,
     publishLocal := {}
   )
-  .aggregate(coreJs, coreJvm, catsJs, catsJvm, scalazJs, scalazJvm, examplesJs, examplesJvm)
+  .aggregate(coreJs, coreJvm, examplesJs, examplesJvm)
 
 lazy val core = crossProject
   .crossType(CrossType.Pure)
@@ -40,34 +40,6 @@ lazy val core = crossProject
 lazy val coreJs  = core.js
 lazy val coreJvm = core.jvm
 
-lazy val cats = crossProject
-  .crossType(CrossType.Pure)
-  .settings(
-    name := "diesel-cats",
-    commonSettings,
-    metaMacroSettings,
-    publishSettings,
-    testSettings,
-    libraryDependencies += "org.typelevel" %%% "cats-core" % catsVersion
-  )
-  .dependsOn(core)
-lazy val catsJs  = cats.js
-lazy val catsJvm = cats.jvm
-
-lazy val scalaz = crossProject
-  .crossType(CrossType.Pure)
-  .settings(
-    name := "diesel-scalaz",
-    commonSettings,
-    metaMacroSettings,
-    publishSettings,
-    testSettings,
-    libraryDependencies += "org.scalaz" %%% "scalaz-core" % "7.2.12"
-  )
-  .dependsOn(core)
-lazy val scalazJs  = scalaz.js
-lazy val scalazJvm = scalaz.jvm
-
 lazy val examples = crossProject
   .crossType(CrossType.Pure)
   .settings(
@@ -77,9 +49,10 @@ lazy val examples = crossProject
     metaMacroSettings,
     publishSettings,
     publishArtifact := false,
-    publishLocal := {}
+    publishLocal := {},
+    libraryDependencies += "org.typelevel" %%% "cats-core" % catsVersion
   )
-  .dependsOn(cats)
+  .dependsOn(core)
 lazy val examplesJs  = examples.js
 lazy val examplesJvm = examples.jvm
 

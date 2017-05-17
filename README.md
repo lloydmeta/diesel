@@ -4,19 +4,17 @@ Boilerplate free Tagless Final DSL macro annotation, written in [scala.meta](htt
 
 ## General idea
 
-This plugin provides an annotation that cuts out the boilerplate associated with writing composable Tagless 
-Final DSLs.
+This plugin provides an annotation that cuts out the boilerplate associated with writing composable Tagless Final DSLs.
 
-The DSL wrapper methods are generated in the annotated trait's companion object, inside an object called `Ops` 
-(customisable by passing a name to the annotation as an argument). These are useful when you need to compose 
-multiple DSLs in the context of `F[_]`.
+The Dsl can be accessed directly from the companion object if you import a converter located in `ops` 
+(customisable by passing a name to the annotation as an argument). This are useful when you need to compose multiple DSLs in the context of `F[_]`, but do not want to name all the interpreter parameters.
 
 Example:
 
 ```scala
-import cats._, implicits._
-import diesel.diesel
-object DieselDemo extends App {
+import diesel._, cats._, cats.implicits._
+
+object DieselDemo  {
 
   // Declare your DSL
   @diesel
@@ -26,27 +24,33 @@ object DieselDemo extends App {
   }
 
   @diesel
-  trait Logging[F[_]] {
+  trait Logger[F[_]] {
     def info(s: String): F[Unit]
   }
 
-  def addAndLog[F[_]: Monad: Maths: Logging](x: Int, y: Int): F[Int] = {
-  // Use the auto-generated wrapper methods when composing 2+ DSLs using Monad[F]
-  import Maths.Ops._, Logging.Ops._
+  // Import the aliasing converter method
+  import Maths.ops._, Logger.ops._
+  def addAndLog[F[_]: Monad: Maths: Logger](x: Int, y: Int): F[Int] = {
     for {
-      r <- add(int(x), int(y))[F]
-      _ <- info(s"result $r")[F]
+      r <- Maths.add(Maths.int(x), Maths.int(y))
+      _ <- Logger.info(s"result $r")
     } yield r
   }
 
-  // Write an interpreter
-  implicit val interp = new Maths[Id] with Logging[Id] {
-    def int(a: Int)                 = a
-    def add(a: Id[Int], b: Id[Int]) = a + b
-    def info(msg: String)           = println(msg)
-  }
+  def main(args: Array[String]): Unit = {
 
-  val _ = addAndLog[Id](1, 2)
+    // Wire in our interpreters
+    implicit val mathsInterp = new Maths[Id] {
+      def int(a: Int)                 = a
+      def add(a: Id[Int], b: Id[Int]) = a + b
+    }
+    implicit val loggingInterp = new Logger[Id] {
+      def info(msg: String)           = println(msg)
+    }
+
+    addAndLog[Id](1, 2)
+    ()
+  }
 
 }
 /*
@@ -73,32 +77,26 @@ trait Maths[F[_]] {
 }
 ```
 
-is expanded into
+is expanded approximately into
 
 ```scala
 // Your algebra. Implement by providing a concrete F and you have your interpreter
 trait Maths[F[_]] {
-  def int(i: Int): F[Int]
-
-  def add(l: F[Int], r: F[Int]): F[Int]
+    def int(i: Int): F[Int]
+    def add(l: F[Int], r: F[Int]): F[Int]
 }
 
+// Helper methods will be added to the algebra's companion object (one will be created if there isn't one yet)
 object Maths {
 
-  import diesel.Dsl
-
-  // Wrapper methods that allow you to delay deciding on a concrete F, and thus
-  // are composable with other DSLs
-  object Ops {
-    def int(i: Int): Dsl[Maths, Int] = new Dsl[Maths, Int] {
-      def apply[F[_]](implicit I: Maths[F]): F[Int] = I.int(i)
-  }
-
-    def add(l: Dsl[Maths, Int], r: Dsl[Maths, Int]): Dsl[Maths, Int] = new Dsl[Maths, Int] {
-      def apply[F[_]](implicit I: Maths[F]): F[Int] = I.add(l.apply[F], r.apply[F])
-    }
+  def apply[F[_]](implicit m: Maths[F]): Maths[F] = m
+  
+  // In charge of aliasing your singleton Maths object to an in-scope Maths[F] :) 
+  object op { 
+    implicit def toDsl[F[_]](o: Maths.type)(implicit m: Maths[F]): Maths[F] = m 
   }
 }
+
 ```
 
 ## Sbt
@@ -119,25 +117,12 @@ resolvers += Resolver.url(
 // new-style macros.  This is similar to how it works for old-style macro
 // annotations and a dependency on macro paradise 2.x.
 addCompilerPlugin(
-  "org.scalameta" % "paradise" % "3.0.0-M7" cross CrossVersion.full)
+  "org.scalameta" % "paradise" % "3.0.0-M8" cross CrossVersion.full)
 
 scalacOptions += "-Xplugin-require:macroparadise"
 
 ```
 
-There are also 2 sub-projects that provide implicit conversions from Dsl to Monad so that you can compose multiple
-DSLs *without* having to write `[F]` everywhere. 
-
-For an example of how this looks, take a look [here](https://github.com/lloydmeta/diesel/blob/master/examples/src/main/scala/KVSLoggingApp.scala#L43-L55)
-
-```scala
-// Choose one or the other:
-
-// for cats
-libraryDependencies += "com.beachape" %% "diesel-cats" % s"$latest_version"
-// for scalaz  
-libraryDependencies += "com.beachape" %% "diesel-scalaz" % s"$latest_version"
-```
 
 # Credit
 
