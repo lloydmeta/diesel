@@ -4,12 +4,10 @@ Boilerplate free Tagless Final DSL macro annotation, written in [scala.meta](htt
 
 ## General idea
 
-This plugin provides an annotation that cuts out the boilerplate associated with writing composable Tagless 
-Final DSLs.
+This plugin provides an annotation that cuts out the boilerplate associated with writing composable Tagless Final DSLs.
 
-The DSL wrapper methods are generated in the annotated trait's companion object, inside an object called `Dsl` 
-(customisable by passing a name to the annotation as an argument). These are useful when you need to compose 
-multiple DSLs in the context of `F[_]`.
+The Dsl can be accessed directly from the companion object if you import a converter located in `ops` 
+(customisable by passing a name to the annotation as an argument). This are useful when you need to compose multiple DSLs in the context of `F[_]`, but do not want to name all the interpreter parameters.
 
 Example:
 
@@ -30,7 +28,7 @@ object DieselDemo  {
     def info(s: String): F[Unit]
   }
 
-  // Use the Dsl wrapping methods
+  // Import the aliasing converter method
   import Maths.ops._, Logger.ops._
   def addAndLog[F[_]: Monad: Maths: Logger](x: Int, y: Int): F[Int] = {
     for {
