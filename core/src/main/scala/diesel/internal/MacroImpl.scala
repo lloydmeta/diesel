@@ -126,9 +126,11 @@ object MacroImpl {
         q"implicit def $singletonToInterpMethName[$aliasedAlgebraBoundTParam](o: $singletonAliasName): $aliasedInterpreterType = ${implicitlyTree(aliasedInterpreterType)}"
 
       val opsWrapper =
-        q"""object $opsObjectName {
-           $toOpsMethod
-           }"""
+        q"""
+        object $opsObjectName {
+          import _root_.scala.language.implicitConversions
+          $toOpsMethod
+        }"""
       TaglessFinalTrees(algebraTypeAlias, singletonTypeAlias, applyMethod, opsWrapper)
     }
 
