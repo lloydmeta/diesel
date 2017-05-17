@@ -23,7 +23,7 @@ class MacroSpec extends FunSpec with Matchers {
         }
       }
 
-      import Maths.Dsl._
+      import Maths.ops._
 
       it("should expand a trait into an object holding Algebra and DSL wrapper methods") {
         def prog[F[_]: Monad: Maths](x: Int, y: Int) = {
@@ -51,7 +51,7 @@ class MacroSpec extends FunSpec with Matchers {
           def pure[A](a: A): F[A] = F.pure(a)
         }
 
-      import ApplicativeInterpreter.Dsl._
+      import ApplicativeInterpreter.ops._
 
       def program[F[_]: ApplicativeInterpreter] = {
         ApplicativeInterpreter.map2(ApplicativeInterpreter.pure(1),
@@ -85,7 +85,7 @@ class MacroSpec extends FunSpec with Matchers {
           }
         }
 
-        import Maths.Dsl._
+        import Maths.ops._
 
         it("should expand a trait into an object holding Algebra and DSL wrapper methods") {
           def prog[F[_]: Monad: Maths](x: Int, y: Int) = {
@@ -170,7 +170,7 @@ class MacroSpec extends FunSpec with Matchers {
       def info(s: => String): F[Unit]
     }
 
-    import Maths.Dsl._, Logger.Dsl._
+    import Maths.ops._, Logger.ops._
 
     def loggedAdd[F[_]: Monad: Maths: Logger](x: Int, y: Int): F[Int] = {
       for {

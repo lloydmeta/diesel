@@ -31,7 +31,7 @@ object DieselDemo  {
   }
 
   // Use the Dsl wrapping methods
-  import Maths.Dsl._, Logger.Dsl._
+  import Maths.ops._, Logger.ops._
   def addAndLog[F[_]: Monad: Maths: Logger](x: Int, y: Int): F[Int] = {
     for {
       r <- Maths.add(Maths.int(x), Maths.int(y))

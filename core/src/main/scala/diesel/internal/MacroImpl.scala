@@ -10,7 +10,7 @@ object MacroImpl {
     val opsName: Term.Name = {
       val arg = self match {
         case q"new $_(${Lit.String(s)})" => s
-        case _                           => Defaults.DslName
+        case _                           => Defaults.OpsName
       }
       Term.Name(arg)
     }

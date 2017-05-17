@@ -6,13 +6,10 @@ import scala.annotation.compileTimeOnly
   * Annotation used for expanding a trait parameterised with a type that takes
   * one type application into a DSL.
   *
-  * By default, the operations generated will have the name "Dsl", but this annotation
-  * takes a String argument that you can use to customise it.
+  * By default, the operation-wrapping method will be generated inside an object named "ops",
+  * but this annotation * takes a String argument that you can use to customise it.
   *
-  * If you wish to put concrete methods into the resulting companion object, write them
-  * in a separate concrete object. The Tagless-Final expansions will be prepended to the
-  * body of the companion object that you write. If you don't write a companion object,
-  * one will be created.
+  * There is also an `apply` method that can be bind an in-scope interpreter exactly like `implicitly`.
   *
   * Example:
   *
@@ -32,9 +29,8 @@ import scala.annotation.compileTimeOnly
   *      | } }
   * scala> import Wrapper._
   *
-  * // To use our DSL, use the magic imports that "alias" in-scope interpreters to their companion objects
-  * scala> import Maths.Dsl._, Logger.Dsl._
-  *
+  * // To use our DSL, import the converters that "alias" in-scope interpreters to their companion objects
+  * scala> import Maths.ops._, Logger.ops._
   * scala> def loggedAdd[F[_]: Monad: Maths: Logger](x: Int, y: Int): F[Int] = {
   *      |   for {
   *      |     s <- Maths.add(x, y)
@@ -56,7 +52,7 @@ import scala.annotation.compileTimeOnly
   */
 @SuppressWarnings(Array("org.wartremover.warts.DefaultArguments"))
 @compileTimeOnly("Enable macro paradise to expand macro annotations")
-class diesel(dslName: String = Defaults.DslName) extends scala.annotation.StaticAnnotation {
+class diesel(dslName: String = Defaults.OpsName) extends scala.annotation.StaticAnnotation {
 
   inline def apply(defn: Any): Any = meta {
     val r = internal.MacroImpl.expand(this, defn)
@@ -67,5 +63,5 @@ class diesel(dslName: String = Defaults.DslName) extends scala.annotation.Static
 }
 
 object Defaults {
-  val DslName: String = "Dsl"
+  val OpsName: String = "ops"
 }

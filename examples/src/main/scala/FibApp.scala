@@ -13,7 +13,7 @@ object FibApp extends App {
     */
   def cachedFib[F[_]: Monad: KVStore: Maths: Logger](i: Int): F[Int] = {
     // Import the auto-generated methods
-    import KVStore.Dsl._, Logger.Dsl._, Maths.Dsl._
+    import KVStore.ops._, Logger.ops._, Maths.ops._
 
     i match {
       case _ if i <= 0 => Monad[F].pure(0)

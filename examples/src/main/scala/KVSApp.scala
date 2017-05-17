@@ -5,7 +5,7 @@ import scala.language.higherKinds
 @SuppressWarnings(Array("org.wartremover.warts.Any"))
 object KVSApp extends App {
 
-  import KVStore.Dsl._
+  import KVStore.ops._
 
   // This is one way to compose a program
   def program1[F[_]: Monad: KVStore]: F[Option[Int]] = {

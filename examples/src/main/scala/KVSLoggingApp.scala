@@ -5,9 +5,9 @@ import scala.language.higherKinds
 @SuppressWarnings(Array("org.wartremover.warts.Any"))
 object KVSLoggingApp extends App {
 
-  import Maths.Dsl._
-  import Logger.Dsl._
-  import KVStore.Dsl._
+  import Maths.ops._
+  import Logger.ops._
+  import KVStore.ops._
 
   /**
     * Example of composing multiple languages.
