@@ -92,7 +92,7 @@ object Maths {
   def apply[F[_]](implicit m: Maths[F]): Maths[F] = m
   
   // In charge of aliasing your singleton Maths object to an in-scope Maths[F] :) 
-  object Dsl { 
+  object op { 
     implicit def toDsl[F[_]](o: Maths.type)(implicit m: Maths[F]): Maths[F] = m 
   }
 }
