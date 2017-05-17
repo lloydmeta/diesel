@@ -27,7 +27,6 @@ object AutomateScalafmtPlugin extends AutoPlugin {
                   .descendantsExcept(include, exclude)
                   .get
                   .toSet
-
               def format(handler: Set[File] => Unit, msg: String) = {
                 def update(handler: Set[File] => Unit, msg: String)(in: ChangeReport[File],
                                                                     out: ChangeReport[File]) = {
@@ -39,29 +38,21 @@ object AutomateScalafmtPlugin extends AutoPlugin {
                   handler(files)
                   files
                 }
-
                 FileFunction.cached(cache)(FilesInfo.hash, FilesInfo.exists)(update(handler, msg))(
-                  sources)
+                  sources
+                )
               }
-
               def formattingHandler(files: Set[File]) =
                 if (files.nonEmpty) {
                   val filesArg = files.map(_.getAbsolutePath).mkString(",")
-                  scalafmt.foreach(_.cli.main(Array("--non-interactive", "-i", "-f", filesArg)))
+                  ScalafmtBootstrap.main(List("--quiet", "-i", "-f", filesArg))
                 }
-
               format(formattingHandler, "Formatting")
               format(_ => (), "Reformatted") // Recalculate the cache
             }
           )
         )
       }
-  }
-
-  val scalafmt: Option[ScalafmtBootstrap] = {
-    val either = ScalafmtBootstrap.fromVersion("0.6.3")
-    either.left.foreach(_.printStackTrace())
-    either.right.toOption
   }
 
   private val scalafmtInc = taskKey[Unit]("Incrementally format modified sources")
@@ -72,5 +63,4 @@ object AutomateScalafmtPlugin extends AutoPlugin {
 
   override def projectSettings =
     (includeFilter.in(scalafmtInc) := "*.scala") +: autoImport.automateScalafmtFor(Compile, Test)
-
 }

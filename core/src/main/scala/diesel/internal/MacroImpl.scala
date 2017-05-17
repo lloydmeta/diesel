@@ -44,7 +44,7 @@ object MacroImpl {
         val TaglessFinalTrees(applyMethod, opsObject) =
           buildTrees(tname, opsName, tparams, template)
         val templateStats: Seq[Stat] =
-          applyMethod +:opsObject +: companion.templ.stats.getOrElse(Nil)
+          applyMethod +: opsObject +: companion.templ.stats.getOrElse(Nil)
         val newObjTemplate = companion.templ.copy(stats = Some(templateStats))
         Term.Block(
           Seq(
@@ -76,13 +76,13 @@ object MacroImpl {
                          tparams: Seq[Type.Param],
                          template: Template): TaglessFinalTrees = {
     tparams match {
-      case Seq(tparam) if tparam.tparams.size == 1 => {
+      case Seq(tparam) => {
         val typedContext = new TaglessFinalBuilder(algebraName, opsName, tparam, template)
         typedContext.build()
       }
       case _ =>
         abort(s"""
-            |Sorry, we only work with one type parameter with one hole, but you passed:
+            |Sorry, we only work with one type parameter per algebra, but you passed:
             |
             |  ${tparams.mkString(", ")}
             |""".stripMargin)
@@ -95,20 +95,22 @@ object MacroImpl {
                                     template: Template) {
 
     val algebraBoundTParam = tparam.copy(cbounds = Seq(algebraName)) // We drop all existing CBounds
-    val tparamName = tparam.name.value
+    val tparamName         = tparam.name.value
 
-    val tparamAsType = Type.fresh().copy(tparamName)
+    val tparamAsType    = Type.fresh().copy(tparamName)
     val interpreterType = Type.Apply(algebraName, Seq(tparamAsType))
 
-    val singletonToInterpMethName = Term.Name(s"singleton${algebraName.value}To${opsObjectName.value}")
+    val singletonToInterpMethName =
+      Term.Name(s"singleton${algebraName.value}To${opsObjectName.value}")
     val singletonType = Type.Name(s"${algebraName.value}.type")
 
     def build(): TaglessFinalTrees = {
 
-      val applyMethod = q"def apply[$algebraBoundTParam]: $interpreterType = ${implicitlyTree(interpreterType)}"
+      val applyMethod =
+        q"def apply[$algebraBoundTParam]: $interpreterType = ${implicitlyTree(interpreterType)}"
 
-      val toOpsMethod = q"implicit def $singletonToInterpMethName[$algebraBoundTParam](o: $singletonType): $interpreterType = ${implicitlyTree(interpreterType)}"
-
+      val toOpsMethod =
+        q"implicit def $singletonToInterpMethName[$algebraBoundTParam](o: $singletonType): $interpreterType = ${implicitlyTree(interpreterType)}"
 
       val opsWrapper =
         q"""object $opsObjectName {
@@ -117,7 +119,7 @@ object MacroImpl {
       TaglessFinalTrees(applyMethod, opsWrapper)
     }
 
-    def implicitlyTree(t: Type): Term.ApplyType =  q"_root_.scala.Predef.implicitly[$t]"
+    def implicitlyTree(t: Type): Term.ApplyType = q"_root_.scala.Predef.implicitly[$t]"
   }
 
   private case class TaglessFinalTrees(applyMethod: Defn.Def, opsObject: Defn.Object)
