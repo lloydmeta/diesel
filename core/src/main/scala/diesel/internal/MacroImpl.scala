@@ -100,7 +100,7 @@ object MacroImpl {
     val tparamAsType = Type.fresh().copy(tparamName)
     val interpreterType = Type.Apply(algebraName, Seq(tparamAsType))
 
-    val singletonToInterpMethName = Term.Name(s"singletonTo${opsObjectName.value}")
+    val singletonToInterpMethName = Term.Name(s"singleton${algebraName.value}To${opsObjectName.value}")
     val singletonType = Type.Name(s"${algebraName.value}.type")
 
     def build(): TaglessFinalTrees = {

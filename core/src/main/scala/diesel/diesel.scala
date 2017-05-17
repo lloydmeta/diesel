@@ -32,14 +32,6 @@ import scala.annotation.compileTimeOnly
   *      | } }
   * scala> import Wrapper._
   *
-  * scala> implicit val MathsIdInterp = new Maths[Id] {
-  *      |   def add(l: Int, r: Int) = l + r
-  *      | }
-  *
-  * scala> implicit val LoggerIdInterp = new Logger[Id] {
-  *      |   def info(s: => String) = println(s)
-  *      | }
-  *
   * // To use our DSL, use the magic imports that "alias" in-scope interpreters to their companion objects
   * scala> import Maths.Dsl._, Logger.Dsl._
   *
@@ -48,6 +40,14 @@ import scala.annotation.compileTimeOnly
   *      |     s <- Maths.add(x, y)
   *      |     _ <- Logger.info(s"Sum was $s")
   *      |   } yield s
+  *      | }
+  *
+  * scala> implicit val MathsIdInterp = new Maths[Id] {
+  *      |   def add(l: Int, r: Int) = l + r
+  *      | }
+  *
+  * scala> implicit val LoggerIdInterp = new Logger[Id] {
+  *      |   def info(s: => String) = println(s)
   *      | }
   *
   * scala> loggedAdd[Id](3, 10)

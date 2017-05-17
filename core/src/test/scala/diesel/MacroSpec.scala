@@ -4,7 +4,6 @@ import cats._
 import cats.implicits._
 import org.scalatest.{FunSpec, Matchers}
 
-
 class MacroSpec extends FunSpec with Matchers {
 
   describe("@diesel annotation") {
@@ -20,7 +19,6 @@ class MacroSpec extends FunSpec with Matchers {
       object Maths {
         implicit val interpreter = new Maths[Id] {
           def add(l: Int, r: Int) = l + r
-
 
         }
       }
@@ -56,7 +54,8 @@ class MacroSpec extends FunSpec with Matchers {
       import ApplicativeInterpreter.Dsl._
 
       def program[F[_]: ApplicativeInterpreter] = {
-        ApplicativeInterpreter.map2(ApplicativeInterpreter.pure(1), ApplicativeInterpreter.pure(2))(_ + _)
+        ApplicativeInterpreter.map2(ApplicativeInterpreter.pure(1),
+                                    ApplicativeInterpreter.pure(2))(_ + _)
       }
 
       it("should work with Option") {
@@ -156,8 +155,42 @@ class MacroSpec extends FunSpec with Matchers {
       }
     }
 
-
   }
 
+  describe("composing multiple DSLs") {
+
+    @diesel
+    trait Maths[G[_]] {
+      def add(l: Int, r: Int): G[Int]
+
+    }
+
+    @diesel
+    trait Logger[F[_]] {
+      def info(s: => String): F[Unit]
+    }
+
+    import Maths.Dsl._, Logger.Dsl._
+
+    def loggedAdd[F[_]: Monad: Maths: Logger](x: Int, y: Int): F[Int] = {
+      for {
+        s <- Maths.add(x, y)
+        _ <- Logger.info(s"Sum was $s")
+      } yield s
+    }
+
+
+    implicit val MathsIdInterp = new Maths[Id] {
+      def add(l: Int, r: Int) = l + r
+    }
+
+    implicit val LoggerIdInterp = new Logger[Id] {
+      def info(s: => String) = println(s)
+    }
+
+    it("should work as expected") {
+      loggedAdd[Id](3, 10) shouldBe 13
+    }
+  }
 
 }
