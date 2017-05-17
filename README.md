@@ -28,7 +28,7 @@ object DieselDemo  {
     def info(s: String): F[Unit]
   }
 
-  // Import the aliasing converter method
+  // Import companion-to-interpreter aliasing sugar
   import Maths.ops._, Logger.ops._
   def addAndLog[F[_]: Monad: Maths: Logger](x: Int, y: Int): F[Int] = {
     for {
@@ -103,9 +103,10 @@ object Maths {
 
 [![Maven Central](https://maven-badges.herokuapp.com/maven-central/com.beachape/diesel-core_2.11/badge.svg)](https://maven-badges.herokuapp.com/maven-central/com.beachape/diesel-core_2.11)
 
-```scala
-libraryDependencies += "com.beachape" %% "diesel-core" % s"$latest_version"
+Diesel is published for Scala 2.11, 2.12 and ScalaJS.
 
+```scala
+libraryDependencies += "com.beachape" %% "diesel-core" % s"$latest_version" % Compile
 
 // Additional ceremony for using Scalameta macro annotations
 
