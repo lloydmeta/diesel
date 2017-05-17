@@ -95,7 +95,7 @@ object MacroImpl {
   // Constants that we reuse when aliasing types
   private val algebraAliasName   = Type.Name("AlgebraTypeAlias")
   private val singletonAliasName = Type.Name("SingletonTypeAlias")
-  private val singletonTypeAlias = q"type $singletonAliasName = this.type"
+  private val singletonTypeAlias = q"private type $singletonAliasName = this.type"
 
   private class TaglessFinalBuilder(algebraName: Type.Name,
                                     opsObjectName: Term.Name,
@@ -110,7 +110,7 @@ object MacroImpl {
 
     // Aliasing our types in case the user decides to get creative with more types/objects
     // inside their companion
-    private val algebraTypeAlias          = q"type $algebraAliasName[$boundlessTparam] = $interpreterType"
+    private val algebraTypeAlias          = q"private type $algebraAliasName[$boundlessTparam] = $interpreterType"
     private val aliasedInterpreterType    = Type.Apply(algebraAliasName, Seq(tparamAsType))
     private val aliasedAlgebraBoundTParam = tparam.copy(cbounds = Seq(algebraAliasName))
 
