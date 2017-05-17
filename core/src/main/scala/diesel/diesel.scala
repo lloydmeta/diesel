@@ -6,7 +6,7 @@ import scala.annotation.compileTimeOnly
   * Annotation used for expanding a trait parameterised with a type that takes
   * one type application into a DSL.
   *
-  * By default, the operations generated will have the name "Ops", but this annotation
+  * By default, the operations generated will have the name "Dsl", but this annotation
   * takes a String argument that you can use to customise it.
   *
   * If you wish to put concrete methods into the resulting companion object, write them
@@ -17,54 +17,55 @@ import scala.annotation.compileTimeOnly
   * Example:
   *
   * {{{
-  * scala> import diesel._
+  * scala> import diesel._, cats._, cats.implicits._
   *
   * // Wrapper is only for the sake of sbt-doctest and is unnecessary in real-life usage
   * scala> object Wrapper {
   *      | // Declare our DSL
   *      | @diesel
   *      | trait Maths[G[_]] {
-  *      |   def int(i: Int): G[Int]
-  *      |   def add(l: G[Int], r: G[Int]): G[Int]
+  *      |   def add(l: Int, r: Int): G[Int]
+  *      | }
+  *      | @diesel
+  *      | trait Logger[F[_]] {
+  *      |   def info(s: => String): F[Unit]
   *      | } }
   * scala> import Wrapper._
   *
-  * // Write an interpreter
-  * scala> type Id[A] = A
-  * scala> val interpreter = new Maths[Id] {
-  *      |   def int(i: Int)                 = i
-  *      |   def add(l: Id[Int], r: Id[Int]) = l + r
+  * scala> implicit val MathsIdInterp = new Maths[Id] {
+  *      |   def add(l: Int, r: Int) = l + r
   *      | }
   *
-  * // Now we can use our DSL
-  * scala> import Maths._, Ops._
+  * scala> implicit val LoggerIdInterp = new Logger[Id] {
+  *      |   def info(s: => String) = println(s)
+  *      | }
   *
-  * scala> int(3)(interpreter)
-  * res0: Int = 3
+  * // To use our DSL, use the magic imports that "alias" in-scope interpreters to their companion objects
+  * scala> import Maths.Dsl._, Logger.Dsl._
   *
-  * scala> add(int(3), int(10))(interpreter)
-  * res1: Int = 13
+  * scala> def loggedAdd[F[_]: Monad: Maths: Logger](x: Int, y: Int): F[Int] = {
+  *      |   for {
+  *      |     s <- Maths.add(x, y)
+  *      |     _ <- Logger.info(s"Sum was $s")
+  *      |   } yield s
+  *      | }
+  *
+  * scala> loggedAdd[Id](3, 10)
+  * res0: Int = 13
   * }}}
   */
 @SuppressWarnings(Array("org.wartremover.warts.DefaultArguments"))
 @compileTimeOnly("Enable macro paradise to expand macro annotations")
-class diesel(opsName: String = Defaults.OpsName) extends scala.annotation.StaticAnnotation {
+class diesel(dslName: String = Defaults.DslName) extends scala.annotation.StaticAnnotation {
 
   inline def apply(defn: Any): Any = meta {
     val r = internal.MacroImpl.expand(this, defn)
-//    println(r.syntax)
+    println(r.syntax)
     r
   }
 
 }
 
 object Defaults {
-  val OpsName: String = "Ops"
+  val DslName: String = "Dsl"
 }
-
-/**
-  * Used to denote declarations inside a @diesel-annotated trait so that it will
-  * be forwarded as-is into the generated Algebra trait, without generating any DSL-wrapper
-  * methods
-  */
-class local extends scala.annotation.StaticAnnotation

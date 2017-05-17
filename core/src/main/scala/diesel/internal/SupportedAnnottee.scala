@@ -13,7 +13,7 @@ trait SupportedAnnottee {
 
   def template: Template
 
-  def withNewTemplate(template: Template): Stat
+  def underlying: Stat
 
 }
 
@@ -22,8 +22,9 @@ case class TraitAnnottee(mods: Seq[Mod],
                          tparams: Seq[Type.Param],
                          template: Template)
     extends SupportedAnnottee {
-  def withNewTemplate(newTemplate: Template): Stat = {
-    q"..$mods trait $tname[..$tparams] extends $newTemplate"
+
+  def underlying: Stat = {
+    q"..$mods trait $tname[..$tparams] extends $template"
   }
 }
 
@@ -33,8 +34,8 @@ case class ClassAnnottee(mods: Seq[Mod],
                          ctor: Ctor.Primary,
                          template: Template)
     extends SupportedAnnottee {
-  def withNewTemplate(newTemplate: Template): Stat = {
-    Defn.Class(mods, tname, tparams, ctor, newTemplate)
+  def underlying: Stat = {
+    Defn.Class(mods, tname, tparams, ctor, template)
   }
 }
 

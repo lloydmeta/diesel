@@ -1,49 +1,38 @@
 package diesel
 
-import cats.Applicative
+import cats._
+import cats.implicits._
 import org.scalatest.{FunSpec, Matchers}
 
-/**
-  * Created by Lloyd on 4/7/17.
-  *
-  * Copyright 2017
-  */
-class MacroSpec extends FunSpec with Matchers {
 
-  type Id[A] = A
+class MacroSpec extends FunSpec with Matchers {
 
   describe("@diesel annotation") {
 
     describe("Simple Maths DSL") {
 
       @diesel
-      trait Maths[G[_]] { self =>
-        import scala.annotation._
-        @local
-        protected def meh: Int
-        def int(i: Int): G[Int]
-        def add(l: G[Int], r: G[Int]): G[Int]
-        def optInt(i: Option[Int]): G[Option[Int]]
-        def wrappedInt(i: Int): G[Int] = self.int(i)
-        protected[diesel] def mixedInts[H[_]](i: Int,
-                                              optInt: Option[Int],
-                                              gInt: G[Int],
-                                              hInt: H[Int]): G[Int]
+      trait Maths[G[_]] {
+        def add(l: Int, r: Int): G[Int]
+
       }
 
-      val interpreter = new Maths[Id] {
-        protected val meh: Int                                                        = 3
-        def int(i: Int)                                                               = i
-        def add(l: Id[Int], r: Id[Int])                                               = l + r
-        def optInt(i: Option[Int])                                                    = i
-        def mixedInts[H[_]](i: Int, optInt: Option[Int], gInt: Id[Int], hInt: H[Int]) = i
+      object Maths {
+        implicit val interpreter = new Maths[Id] {
+          def add(l: Int, r: Int) = l + r
+
+
+        }
       }
 
-      import Maths.Ops._
+      import Maths.Dsl._
 
       it("should expand a trait into an object holding Algebra and DSL wrapper methods") {
-        int(3)(interpreter) shouldBe 3
-        add(int(3), int(10))(interpreter) shouldBe 13
+        def prog[F[_]: Monad: Maths](x: Int, y: Int) = {
+          Maths.add(x, y)
+        }
+
+        prog[Id](3, 19) shouldBe 22
       }
 
     }
@@ -57,17 +46,18 @@ class MacroSpec extends FunSpec with Matchers {
         def pure[A](a: A): F[A]
       }
 
-      def applicative[F[_]](implicit F: Applicative[F]): ApplicativeInterpreter[F] =
+      implicit def applicative[F[_]](implicit F: Applicative[F]): ApplicativeInterpreter[F] =
         new ApplicativeInterpreter[F] {
           def map2[A, B, C](fa: F[A], fb: F[B])(f: (A, B) => C): F[C] =
             F.map2(fa, fb)(f)
           def pure[A](a: A): F[A] = F.pure(a)
         }
 
-      import ApplicativeInterpreter._, Ops._
-      import cats.implicits._
+      import ApplicativeInterpreter.Dsl._
 
-      val program = map2(pure(1), pure(2))(_ + _)
+      def program[F[_]: ApplicativeInterpreter] = {
+        ApplicativeInterpreter.map2(ApplicativeInterpreter.pure(1), ApplicativeInterpreter.pure(2))(_ + _)
+      }
 
       it("should work with Option") {
         val id = program(applicative[Id])
@@ -85,24 +75,25 @@ class MacroSpec extends FunSpec with Matchers {
 
         @diesel
         trait Maths[G[_]] {
-          def int(i: Int): G[Int]
-          def add(l: G[Int], r: G[Int]): G[Int]
+          def add(l: Int, r: Int): G[Int]
         }
 
         object Maths {
-          val answer: Int = 42
+          val meh: Int = 42
 
-          val interpreter = new Maths[Id] {
-            def int(i: Int)                 = i
-            def add(l: Id[Int], r: Id[Int]) = l + r
+          implicit val interpreter = new Maths[Id] {
+            def add(l: Int, r: Int) = l + r
           }
         }
 
-        import Maths._, Ops._
+        import Maths.Dsl._
 
         it("should expand a trait into an object holding Algebra and DSL wrapper methods") {
-          int(3)(interpreter) shouldBe 3
-          add(int(3), int(10))(interpreter) shouldBe 13
+          def prog[F[_]: Monad: Maths](x: Int, y: Int) = {
+            Maths.add(x, y)
+          }
+
+          prog[Id](3, 19) shouldBe 22
         }
 
       }
@@ -113,29 +104,60 @@ class MacroSpec extends FunSpec with Matchers {
 
         @diesel("Operations")
         trait Maths[G[_]] {
-          def int(i: Int): G[Int]
-          def add(l: G[Int], r: G[Int]): G[Int]
+          def add(l: Int, r: Int): G[Int]
         }
 
         object Maths {
           val answer: Int = 42
 
-          val interpreter = new Maths[Id] {
-            def int(i: Int)                 = i
-            def add(l: Id[Int], r: Id[Int]) = l + r
+          implicit val interpreter = new Maths[Id] {
+            def add(l: Int, r: Int) = l + r
           }
         }
 
-        import Maths._, Maths.Operations._
+        import Maths.Operations._
 
         it("should expand a trait into an object holding Algebra and DSL wrapper methods") {
-          int(3)(interpreter) shouldBe 3
-          add(int(3), int(10))(interpreter) shouldBe 13
+          def prog[F[_]: Monad: Maths](x: Int, y: Int) = {
+            Maths.add(x, y)
+          }
+
+          prog[Id](3, 19) shouldBe 22
+        }
+
+      }
+    }
+    describe("when the annotation is used on an abstract class with a constraint on its type") {
+      describe("Simple Maths DSL") {
+
+        @diesel("Operations")
+        abstract class Maths[G[_]: Monad] {
+          def add(l: Int, r: Int): G[Int]
+        }
+
+        object Maths {
+          val answer: Int = 42
+
+          implicit val interpreter = new Maths[Option] {
+            def add(l: Int, r: Int) = Some(l + r)
+          }
+        }
+
+        import Maths.Operations._
+
+        it("should expand a trait into an object holding Algebra and DSL wrapper methods") {
+          def prog[F[_]: Monad: Maths](x: Int, y: Int) = {
+            Maths.add(x, y)
+          }
+
+          prog[Option](3, 19) shouldBe Some(22)
         }
 
       }
     }
 
+
   }
+
 
 }
