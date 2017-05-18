@@ -28,20 +28,24 @@ object KTransImpl {
           )
         )
       }
-      case _ => abort(s"Unsupported annottee ${defn.syntax}")
+      case _ => abort(
+        s"""
+           |At the moment, only traits and abstract classes are supported,
+           |but you provided:
+           |
+           |${defn.syntax}""".stripMargin)
     }
   }
 
   private val currentTraitHandle = Term.Name("curr")
   private val currentTraitPat    = Pat.Var.Term(currentTraitHandle)
-
   private val natTransArg = Term.Name("natTrans")
 
   private def selectOneFunctor(tparams: Seq[Type.Param]): Type.Param = tparams match {
     case Seq(tparam) if tparam.tparams.size == 1 => tparam
     case _ =>
       abort(
-        s"This annotation only supports types parameterised with a kind that takes one type argument, but you provided $tparams")
+        s"This annotation only supports types parameterised with one kind that takes one type argument, but you provided $tparams")
   }
 
   private class KTransformBuilder(algebraType: Type.Name,
@@ -158,10 +162,10 @@ object KTransImpl {
             }
             .mkString("\n\n")
           Seq(
-            s"""The following are not supported inside the body of a trait annotated with @diesel. Please consider
+            s"""The following are not supported inside the body of a trait annotated with @diesel. If possible, please consider
                |moving them into a companion object:
                |
-             |$statsStrs""".stripMargin)
+               |$statsStrs""".stripMargin)
         } else Nil
       }
       val combinedErrMsgs = specificErrors ++ genUnsupportedErrs
@@ -170,14 +174,9 @@ object KTransImpl {
 
         abort(s"""
                  |
-             |Looks like you're using some unsupported syntax in a trait annotated with @diesel.
+                 |Looks like you're using some unsupported syntax in a trait annotated with @diesel.
                  |
-             |If you want to have some of these moved as-is into the generated algebra, please use the
-                 |@local annotation. Note that such members will not have DSL-wrapping methods generated
-                 |for them.
-                 |
-             |$errsMsg
-           """.stripMargin)
+                 |$errsMsg""".stripMargin)
       }
     }
 
