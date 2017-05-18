@@ -6,7 +6,7 @@ import _root_.cats._, _root_.cats.implicits._
 object DieselDemo  {
 
   // Declare your DSL
-  @ktrans @diesel
+  @diesel
   trait Maths[F[_]] {
     def int(i: Int): F[Int]
     def add(l: F[Int], r: F[Int]): F[Int]
