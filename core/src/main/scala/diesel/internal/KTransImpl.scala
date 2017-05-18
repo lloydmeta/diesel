@@ -28,8 +28,7 @@ object KTransImpl {
           )
         )
       }
-      case _ => abort(
-        s"""
+      case _ => abort(s"""
            |At the moment, only traits and abstract classes are supported,
            |but you provided:
            |
@@ -39,7 +38,7 @@ object KTransImpl {
 
   private val currentTraitHandle = Term.Name("curr")
   private val currentTraitPat    = Pat.Var.Term(currentTraitHandle)
-  private val natTransArg = Term.Name("natTrans")
+  private val natTransArg        = Term.Name("natTrans")
 
   private def selectOneFunctor(tparams: Seq[Type.Param]): Type.Param = tparams match {
     case Seq(tparam) if tparam.tparams.size == 1 => tparam
@@ -86,10 +85,10 @@ object KTransImpl {
       ensureSoundMembers(abstracts, concretes)
 
       val forwardedAbstracts = abstracts.flatMap {
-        case Decl.Val(mods, pats,Type.Apply(_, declTpeParams)) => {
-          val newdeclTpe  = Type.Apply(targetKType, declTpeParams)
+        case Decl.Val(mods, pats, Type.Apply(_, declTpeParams)) => {
+          val newdeclTpe = Type.Apply(targetKType, declTpeParams)
           pats.map { pat =>
-            val access =q"""$natTransArg.apply($currentTraitHandle.${pat.name})"""
+            val access = q"""$natTransArg.apply($currentTraitHandle.${pat.name})"""
             Defn.Val(mods, Seq(pat), Some(newdeclTpe), access)
           }
         }
@@ -117,7 +116,7 @@ object KTransImpl {
     }
 
     private def ensureSoundMembers(dslMembers: List[Stat], concreteMembers: List[Stat]): Unit = {
-      val dslMembersSet = dslMembers.toSet
+      val dslMembersSet      = dslMembers.toSet
       val concreteMembersSet = concreteMembers.toSet
       // The spaces in multiline strings are significant
       val statsWithErrors = findErrors(
