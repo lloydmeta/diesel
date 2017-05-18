@@ -7,6 +7,7 @@ class KTransSpec {
 
   @ktrans
   trait Trait1[F[_]] {
+    val vlaThing, vlaThing2: F[Int]
     def noArg: F[Int]
     def ser[A: Monoid](k: String, o: A): F[Unit]
     def des[A: Monoid](k: String): F[Option[A]]

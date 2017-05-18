@@ -81,7 +81,14 @@ object KTransImpl {
 
       ensureSoundMembers(abstracts, concretes)
 
-      val wrappedAbstracts = abstracts.map {
+      val forwardedAbstracts = abstracts.flatMap {
+        case Decl.Val(mods, pats,Type.Apply(_, declTpeParams)) => {
+          val newdeclTpe  = Type.Apply(targetKType, declTpeParams)
+          pats.map { pat =>
+            val access =q"""$natTransArg.apply($currentTraitHandle.${pat.name})"""
+            Defn.Val(mods, Seq(pat), Some(newdeclTpe), access)
+          }
+        }
         case Decl.Def(mods, name, tparams, paramss, Type.Apply(_, declTpeParams)) => {
           val tparamTypes = tparams.map(tp => Type.Name(tp.name.value))
           val paramNames  = paramss.map(_.map(tp => Term.Name(tp.name.value)))
@@ -91,7 +98,7 @@ object KTransImpl {
               q"""$natTransArg.apply($currentTraitHandle.$name[..$tparamTypes](...$paramNames))"""
             else
               q"""$natTransArg($currentTraitHandle.$name(...$paramNames))"""
-          Defn.Def(mods, name, tparams, paramss, Some(newdeclTpe), body)
+          Seq(Defn.Def(mods, name, tparams, paramss, Some(newdeclTpe), body))
         }
       }
 
@@ -99,7 +106,7 @@ object KTransImpl {
         q"""final def transformK[$transformTargetK]($natTransArg: _root_.diesel.LiteFunK[$tparamAsType, $targetKType]): $algebraType[$targetKType] = {
             val $currentTraitPat = $selfRefTerm
             new $algebraTargetKConstructor {
-              ..$wrappedAbstracts
+              ..$forwardedAbstracts
             }
           }"""
       transformKMeth
