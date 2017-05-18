@@ -180,7 +180,8 @@ trait Maths[G[_]] {
 ### Limitations
 
   - Annottee must be parameterised by a higher kinded type with just 1 type parameter (context bounds allowed though)
-  - No unimplemented methods that return types not contained by the type parameter of the algebra
+  - No unimplemented methods that return types not contained by the kind parameter of the algebra
+  - No unimplemented methods that take arguments parameterised by the same kind as the annottee
   - No unimplemented type members
   - No vals that are not assignments
 
