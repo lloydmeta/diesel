@@ -1,7 +1,6 @@
 package diesel
 
-import cats._
-import cats.implicits._
+import cats._, cats.implicits._
 import org.scalatest.{FunSpec, Matchers}
 
 class DieselSpec extends FunSpec with Matchers {

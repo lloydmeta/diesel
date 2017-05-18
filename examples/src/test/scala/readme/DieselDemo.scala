@@ -1,6 +1,7 @@
 package readme
 
-import diesel._, cats._, cats.implicits._
+import diesel._
+import _root_.cats._, _root_.cats.implicits._
 
 object DieselDemo  {
 

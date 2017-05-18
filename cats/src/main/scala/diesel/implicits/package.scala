@@ -1,7 +1,6 @@
-package diesel.cats
+package diesel
 
 import cats.arrow.FunctionK
-import diesel.FunKLite
 
 import scala.language.implicitConversions
 import scala.language.higherKinds

@@ -1,8 +1,5 @@
-package diesel.scalaz
+package diesel
 
-import diesel.FunKLite
-
-import scala.language.higherKinds
 import scalaz.NaturalTransformation
 
 object Conversions {

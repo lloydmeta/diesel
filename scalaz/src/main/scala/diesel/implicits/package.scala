@@ -1,6 +1,4 @@
-package diesel.scalaz
-
-import diesel.FunKLite
+package diesel
 
 import scala.language.implicitConversions
 import scala.language.higherKinds

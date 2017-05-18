@@ -131,6 +131,8 @@ lazy val metaMacroSettings: Seq[Def.Setting[_]] = Seq(
   // new-style macros.  This is similar to how it works for old-style macro
   // annotations and a dependency on macro paradise 2.x.
   addCompilerPlugin("org.scalameta" % "paradise" % "3.0.0-M8" cross CrossVersion.full),
+  // if your project uses multiple Scala versions, use this for cross building
+  addCompilerPlugin("org.spire-math" % "kind-projector" % "0.9.3" cross CrossVersion.binary),Diesel
   scalacOptions += "-Xplugin-require:macroparadise",
   // temporary workaround for https://github.com/scalameta/paradise/issues/10
   scalacOptions in (Compile, console) := Seq() // macroparadise plugin doesn't work in repl yet.

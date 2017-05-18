@@ -110,6 +110,7 @@ takes 1 type parameter. It's useful when you want to transform any given impleme
 
 ```scala
 import diesel._, cats._
+import diesel.implicits._
 
 @ktrans
 trait Maths[G[_]] {
@@ -124,9 +125,8 @@ val MathsIdInterp = new Maths[Id] {
   def times(l: Int, r: Int) = l * r
 }
 
-val idToOpt = new FunKLite[Id, Option] {
-  def apply[A](fa: Id[A]): Option[A] = Some(fa)
-}
+// Using kind-project syntax
+val idToOpt =  λ[Id ~> Option](Some(_))
 
 // use the auto-generated transformK method to create a Maths[Option] from Maths[Id]
 val MathsOptInterp = MathsIdInterp.transformK(idToOpt)

@@ -2,7 +2,7 @@ package readme
 
 import diesel.ktrans
 import cats._
-import diesel.cats.implicits._
+import diesel.implicits._
 
 object KTransDemo {
 
@@ -19,9 +19,7 @@ object KTransDemo {
     def times(l: Int, r: Int) = l * r
   }
 
-  val idToOpt = new (Id ~> Option) {
-    def apply[A](fa: Id[A]): Option[A] = Some(fa)
-  }
+  val idToOpt =  λ[Id ~> Option](Some(_))
 
   // use the auto-generated transformK method to create a Maths[Option] from Maths[Id]
   val MathsOptInterp = MathsIdInterp.transformK(idToOpt)
