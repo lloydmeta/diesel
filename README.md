@@ -2,11 +2,16 @@
 
 Boilerplate free Tagless Final DSL macro annotation, written in [scala.meta](http://scalameta.org/) for future compatibility and other nice things (e.g. free IDE support, like in IntelliJ).
 
+This library provides 2 macros:
+
+  1. [`@diesel`](#diesel) to make it easier to compose algebras together
+  2. [`@ktrans`](#ktrans) to make it easier to perform Kind transforms on interpreters.
+
 ## `@diesel`
 
 The `@diesel` annotation that cuts out the boilerplate associated with writing composable Tagless Final DSLs.
 
-The Dsl can be accessed directly from the companion object if you import a converter located in `ops` 
+The Dsl can be accessed directly from the companion object if you import a converter located in `ops`
 (customisable by passing a name to the annotation as an argument). This are useful when you need to compose multiple DSLs in the context of `F[_]`, but do not want to name all the interpreter parameters.
 
 ### Example:
@@ -54,17 +59,17 @@ object DieselDemo  {
 
 }
 /*
-[info] Running DieselDemo 
+[info] Running DieselDemo
 result 3
 */
 ```
 
 For more in-depth examples, check out:
 
-  1. [examples/KVSApp](https://github.com/lloydmeta/diesel/blob/master/examples/src/main/scala/KVSApp.scala): a simple single-DSL program 
+  1. [examples/KVSApp](https://github.com/lloydmeta/diesel/blob/master/examples/src/main/scala/KVSApp.scala): a simple single-DSL program
   2. [examples/KVSLoggingApp](https://github.com/lloydmeta/diesel/blob/master/examples/src/main/scala/KVSLoggingApp.scala): composing 2 DSLs in a program
   3. [examples/FibApp](https://github.com/lloydmeta/diesel/blob/master/examples/src/main/scala/FibApp.scala): composing 3 DSLs in a program that calculates fibonacci numbers and caches them.
-  
+
 All of the above examples use a pure KVS interpreter :)
 
 ### How it works
@@ -90,10 +95,10 @@ trait Maths[F[_]] {
 object Maths {
 
   def apply[F[_]](implicit m: Maths[F]): Maths[F] = m
-  
-  // In charge of aliasing your singleton Maths object to an in-scope Maths[F] :) 
-  object op { 
-    implicit def toDsl[F[_]](o: Maths.type)(implicit m: Maths[F]): Maths[F] = m 
+
+  // In charge of aliasing your singleton Maths object to an in-scope Maths[F] :)
+  object op {
+    implicit def toDsl[F[_]](o: Maths.type)(implicit m: Maths[F]): Maths[F] = m
   }
 }
 
@@ -105,7 +110,7 @@ object Maths {
 There is also a handy `@ktrans` annotation that adds a `transformK` method to a trait that is parameterised by a Kind that
 takes 1 type parameter. It's useful when you want to transform any given implementation of that trait for `F[_]` into one
  that implements it on `G[_]`
- 
+
 ### Example
 
 ```scala
@@ -129,14 +134,14 @@ val MathsIdInterp = new Maths[Id] {
 // Id to Option
 val idToOpt =  λ[FunK[Id, Option]](Some(_))
 
-// use the auto-generated transformK method to create a Maths[Option] from Maths[Id] 
+// use the auto-generated transformK method to create a Maths[Option] from Maths[Id]
 // via idToOpt
 val MathsOptInterp = MathsIdInterp.transformK(idToOpt)
 
 assert(MathsOptInterp.add(3, 10) == Some(13))
 ```
 
-There are conversions from Cat's natural transformation (`FunctionK`) or Scalaz's `NaturalTransformation` in the 
+There are conversions from Cat's natural transformation (`FunctionK`) or Scalaz's `NaturalTransformation` in the
 `diesel-cats` and `diesel-scalaz` companion projects.
 
 ### Limitations
@@ -145,7 +150,7 @@ There are conversions from Cat's natural transformation (`FunctionK`) or Scalaz'
   - No unimplemented methods that return types not contained by the type parameter of the algebra
   - No unimplemented type members
   - No vals that are not assignments
-  
+
 ### How it works
 
 ```scala
@@ -164,7 +169,7 @@ trait Maths[G[_]] {
   def add(l: Int, r: Int): G[Int]
   def subtract(l: Int, r: Int): G[Int]
   def times(l: Int, r: Int): G[Int]
-  
+
   // Note that FunK is a really simple NaturalTransform / FunctionK
   final def transformK[H[_]](natTrans: FunK[G, H]): Maths[H] = {
     val curr = this
