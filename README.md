@@ -100,7 +100,7 @@ object Maths {
 ```
 
 
-## ktrans
+## `@ktrans`
 
 There is also a handy `@ktrans` annotation that adds a `transformK` method to a trait that is parameterised by a Kind that
 takes 1 type parameter. It's useful when you want to transform any given implementation of that trait for `F[_]` into one
