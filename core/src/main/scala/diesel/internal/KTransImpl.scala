@@ -177,6 +177,7 @@ object KTransImpl {
       templateStatementsWithIdx.collect {
         case (d: Defn.Def, i) => (d, i)
         case (v: Defn.Val, i) => (v, i)
+        case (v: Defn.Type, i) => (v, i)
       }.toList
 
     private def abstractMembers: List[(Decl, Int)] =
@@ -194,46 +195,6 @@ object KTransImpl {
         case (v @ Decl.Val(_, _, Type.Apply(retName: Type.Name, _)), i)
             if retName.value == tparamName =>
           (v, i)
-      }.toList
-
-    private def importStats: List[(Import, Int)] =
-      templateStatementsWithIdx.collect {
-        case (imp: Import, i) => (imp, i)
-      }.toList
-
-    private def isLocal(mod: Mod): Boolean = mod match {
-      case mod"@local" | mod"@local()" | mod"@diesel.local" | mod"@diesel.local()" => true
-      case _                                                                       => false
-    }
-
-    private def localMembers: List[(Stat, Int)] =
-      templateStatementsWithIdx.collect {
-        case s @ (Decl.Def(mods, _, _, _, _), _) if mods.exists(isLocal) =>
-          s
-        case s @ (Decl.Val(mods, _, _), _) if mods.exists(isLocal) =>
-          s
-        case s @ (Decl.Type(mods, _, _, _), _) if mods.exists(isLocal) =>
-          s
-        case s @ (Decl.Var(mods, _, _), _) if mods.exists(isLocal) =>
-          s
-
-        case s @ (Defn.Def(mods, _, _, _, _, _), _) if mods.exists(isLocal) =>
-          s
-        case s @ (Defn.Val(mods, _, _, _), _) if mods.exists(isLocal) =>
-          s
-        case s @ (Defn.Type(mods, _, _, _), _) if mods.exists(isLocal) =>
-          s
-        case s @ (Defn.Var(mods, _, _, _), _) if mods.exists(isLocal) =>
-          s
-        case s @ (Defn.Macro(mods, _, _, _, _, _), _) if mods.exists(isLocal) =>
-          s
-        case s @ (Defn.Trait(mods, _, _, _, _), _) if mods.exists(isLocal) =>
-          s
-        case s @ (Defn.Class(mods, _, _, _, _), _) if mods.exists(isLocal) =>
-          s
-        case s @ (Defn.Object(mods, _, _), _) if mods.exists(isLocal) =>
-          s
-        case s @ (q"..$mods def this(...$paramss) = $expr", _) if mods.exists(isLocal) => s
       }.toList
 
     private def findErrors(

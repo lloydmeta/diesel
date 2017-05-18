@@ -14,6 +14,8 @@ class KTransSpec {
 
     protected [diesel] def packProt(p: Byte): F[Byte]
     protected def prot(p: Byte): F[Byte]
+
+    private [diesel] def packPriv(p: Byte): F[Byte]
   }
 
   @ktrans
@@ -25,6 +27,8 @@ class KTransSpec {
 
     protected [diesel] def packProt(p: Byte): F[Byte]
     protected def prot(p: Byte): F[Byte]
+
+    private [diesel] def packPriv(p: Byte): F[Byte]
   }
 
   object TraitWithComp {
@@ -40,6 +44,8 @@ class KTransSpec {
 
     protected [diesel] def packProt(p: Byte): G[Byte]
     protected def prot(p: Byte): G[Byte]
+
+    private [diesel] def packPriv(p: Byte): G[Byte]
   }
 
   @ktrans
@@ -51,10 +57,13 @@ class KTransSpec {
 
     protected [diesel] def packProt(p: Byte): G[Byte]
     protected def prot(p: Byte): G[Byte]
+
+    private [diesel] def packPriv(p: Byte): G[Byte]
   }
 
   @ktrans
   abstract class AbsClassWithCBoundAndParams[G[_]: Monad](age: Int)(name: String) { lulz =>
+    type Hey = Int
     val eh: Int = 3
 
     def noArg: G[Int]
@@ -64,6 +73,8 @@ class KTransSpec {
 
     protected [diesel] def packProt(p: Byte): G[Byte]
     protected def prot(p: Byte): G[Byte]
+
+    private [diesel] def packPriv(p: Byte): G[Byte]
   }
 
 
