@@ -4,7 +4,7 @@ import cats._
 import cats.implicits._
 import org.scalatest.{FunSpec, Matchers}
 
-class MacroSpec extends FunSpec with Matchers {
+class DieselSpec extends FunSpec with Matchers {
 
   describe("@diesel annotation") {
 

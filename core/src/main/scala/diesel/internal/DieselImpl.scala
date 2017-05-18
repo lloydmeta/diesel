@@ -4,7 +4,7 @@ import scala.meta._
 import scala.collection.immutable._
 import _root_.diesel.Defaults
 
-object MacroImpl {
+object DieselImpl {
 
   def expand(self: Tree, defn: Tree): Stat = {
     val opsName: Term.Name = {

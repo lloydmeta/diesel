@@ -124,6 +124,15 @@ scalacOptions += "-Xplugin-require:macroparadise"
 
 ```
 
+# ktrans
+
+If the algebra has the following characteristics, then you can use the `@ktrans` annotation to generate a
+`transformK` method on your algebra which changes it from producing `F[_]` to `G[_]`:
+
+  - Parameterised by a higher kinded type with just 1 type parameter
+  - No unimplemented protected methods (package protected is fine)
+  - No unimplemented methods that return types not contained by the type parameter of the algebra
+  - No vals that are not assignments
 
 # Credit
 

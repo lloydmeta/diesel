@@ -55,7 +55,7 @@ import scala.annotation.compileTimeOnly
 class diesel(dslName: String = Defaults.OpsName) extends scala.annotation.StaticAnnotation {
 
   inline def apply(defn: Any): Any = meta {
-    val r = internal.MacroImpl.expand(this, defn)
+    val r = internal.DieselImpl.expand(this, defn)
 //    println(r.syntax)
     r
   }
