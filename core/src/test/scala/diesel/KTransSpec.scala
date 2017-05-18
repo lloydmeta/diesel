@@ -40,7 +40,7 @@ class KTransSpec {
   }
 
   @ktrans
-  abstract class AbsClassWithCBound[G[_]: Monad] {
+  abstract class AbsClassWithCBound[G[_]: Monad] { lulz =>
     def noArg: G[Int]
     def ser[A: Monoid](k: String, o: A): G[Unit]
     def des[A: Monoid](k: String): G[Option[A]]
@@ -48,5 +48,16 @@ class KTransSpec {
 
     protected [diesel] def prot(p: Byte): G[Byte]
   }
+
+  @ktrans
+  abstract class AbsClassWithCBoundAndParams[G[_]: Monad](age: Int)(name: String) { lulz =>
+    def noArg: G[Int]
+    def ser[A: Monoid](k: String, o: A): G[Unit]
+    def des[A: Monoid](k: String): G[Option[A]]
+    def paramss[A](k: String)(i: Int): G[Int]
+
+    protected [diesel] def prot(p: Byte): G[Byte]
+  }
+
 
 }
