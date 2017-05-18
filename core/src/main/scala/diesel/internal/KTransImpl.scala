@@ -44,7 +44,10 @@ object KTransImpl {
         s"This annotation only supports types parameterised with a kind that takes one type argument, but you provided $tparams")
   }
 
-  private class KTransformBuilder(algebraType: Type.Name, tparam: Type.Param, template: Template, ctorRefBuilder: Type => Ctor.Call) {
+  private class KTransformBuilder(algebraType: Type.Name,
+                                  tparam: Type.Param,
+                                  template: Template,
+                                  ctorRefBuilder: Type => Ctor.Call) {
 
     private val selfRef = template.self
     private val selfRefTerm: Term.Name = {
@@ -106,7 +109,7 @@ object KTransImpl {
       // The spaces in multiline strings are significant
       val statsWithErrors = findErrors(
         Seq(
-          ("Please use only package private or protected modifiers.", privateMembersPf(Set.empty)),
+          ("Please use only package private modifiers.", privateMembersPf(Set.empty)),
           ("Return types must be explicitly stated.", noReturnTypePf(Set.empty)),
           (s"""The return type of this method is not wrapped in $tparamName[_]. Methods like this can be
               |      added to the trait's companion object.""".stripMargin,
@@ -247,25 +250,22 @@ object KTransImpl {
     }
 
     type StatPF = PartialFunction[Stat, Stat]
-    private def isPrivateOrProtected(m: Mod): Boolean = {
+    private def isPrivate(m: Mod): Boolean = {
       // This is the only reliable way to compare mods...
       m match {
-        case mod"protected" | mod"private" => true
-        case _                             => false
+        case mod"private" => true
+        case _            => false
       }
     }
 
     private def privateMembersPf(exempt: Set[Stat]): StatPF = {
-      case d @ Defn.Def(mods, _, _, _, _, _)
-          if mods.exists(isPrivateOrProtected) && !exempt.contains(d) =>
+      case d @ Defn.Def(mods, _, _, _, _, _) if mods.exists(isPrivate) && !exempt.contains(d) =>
         d
-      case v @ Defn.Val(mods, _, _, _)
-          if mods.exists(isPrivateOrProtected) && !exempt.contains(v) =>
+      case v @ Defn.Val(mods, _, _, _) if mods.exists(isPrivate) && !exempt.contains(v) =>
         v
-      case d @ Decl.Def(mods, _, _, _, _)
-          if mods.exists(isPrivateOrProtected) && !exempt.contains(d) =>
+      case d @ Decl.Def(mods, _, _, _, _) if mods.exists(isPrivate) && !exempt.contains(d) =>
         d
-      case v @ Decl.Val(mods, _, _) if mods.exists(isPrivateOrProtected) && !exempt.contains(v) =>
+      case v @ Decl.Val(mods, _, _) if mods.exists(isPrivate) && !exempt.contains(v) =>
         v
     }
     private def noReturnTypePf(exempt: Set[Stat]): StatPF = {
