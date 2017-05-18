@@ -5,7 +5,7 @@ import scala.language.higherKinds
 
 object Conversions {
 
-  def funKToFunKLite[F[_], G[_]](functionK: F ~> G) = new FunKLite[F, G] {
+  def funKToFunK[F[_], G[_]](functionK: F ~> G) = new FunK[F, G] {
     def apply[A](fa: F[A]): G[A] = functionK(fa)
   }
 

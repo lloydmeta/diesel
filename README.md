@@ -162,7 +162,7 @@ trait Maths[G[_]] {
   def add(l: Int, r: Int): G[Int]
   def subtract(l: Int, r: Int): G[Int]
   def times(l: Int, r: Int): G[Int]
-  final def transformK[H[_]](natTrans: FunKLite[G, H]): Maths[H] = {
+  final def transformK[H[_]](natTrans: FunK[G, H]): Maths[H] = {
     val curr = this
     new Maths[H] {
       def add(l: Int, r: Int): H[Int] = natTrans(curr.add(l, r))

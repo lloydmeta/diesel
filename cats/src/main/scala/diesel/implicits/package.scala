@@ -7,7 +7,7 @@ import scala.language.higherKinds
 
 package object implicits {
 
-  implicit def functionKToFunKLite[F[_], G[_]](f: F ~> G): FunKLite[F, G] =
-    Conversions.funKToFunKLite(f)
+  implicit def functionKToFunK[F[_], G[_]](f: F ~> G): FunK[F, G] =
+    Conversions.funKToFunK(f)
 
 }

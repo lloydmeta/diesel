@@ -103,7 +103,7 @@ object KTransImpl {
       }
 
       q"""
-      final def $transKMethodName[$transformTargetK]($natTransArg: _root_.diesel.FunKLite[$tparamAsType, $targetKType]): $algebraType[$targetKType] = {
+      final def $transKMethodName[$transformTargetK]($natTransArg: _root_.diesel.FunK[$tparamAsType, $targetKType]): $algebraType[$targetKType] = {
         val $currentTraitPat = $selfRefTerm
         new $algebraTargetKConstructor {
           ..$forwardedAbstracts

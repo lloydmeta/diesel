@@ -42,9 +42,7 @@ import scala.annotation.compileTimeOnly
   *      |   def times(l: Int, r: Int) = l * r
   *      | }
   *
-  * scala> val idToOpt = new FunKLite[Id, Option] {
-  *      |   def apply[A](fa: Id[A]): Option[A] = Some(fa)
-  *      | }
+  * scala> val idToOpt = λ[FunK[Id, Option]](Some(_))
   *
   * scala> val MathsOptInterp = MathsIdInterp.transformK(idToOpt)
   *
