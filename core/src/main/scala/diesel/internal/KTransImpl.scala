@@ -11,7 +11,7 @@ object KTransImpl {
     val transKMethodName: Term.Name = {
       val arg = self match {
         case q"new $_(${Lit.String(s)})" => s
-        case _                           => Defaults.transformMethodName
+        case _                           => Defaults.TransKMethodName
       }
       Term.Name(arg)
     }

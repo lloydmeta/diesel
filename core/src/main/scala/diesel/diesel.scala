@@ -61,8 +61,3 @@ class diesel(dslName: String = Defaults.OpsName) extends scala.annotation.Static
   }
 
 }
-
-object Defaults {
-  val OpsName: String = "ops"
-  val transformMethodName: String = "transformK"
-}

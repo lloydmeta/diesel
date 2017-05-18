@@ -63,7 +63,7 @@ import scala.annotation.compileTimeOnly
   */
 @SuppressWarnings(Array("org.wartremover.warts.DefaultArguments"))
 @compileTimeOnly("Enable macro paradise to expand macro annotations")
-class ktrans(transformMethodName: String = Defaults.transformMethodName) extends scala.annotation.StaticAnnotation {
+class ktrans(transformMethodName: String = Defaults.TransKMethodName) extends scala.annotation.StaticAnnotation {
 
   inline def apply(defn: Any): Any = meta {
     val r = internal.KTransImpl.expand(this, defn)
