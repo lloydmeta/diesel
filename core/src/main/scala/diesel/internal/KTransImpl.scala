@@ -113,6 +113,7 @@ object KTransImpl {
         Seq(
           ("Please use only package private modifiers.", privateMembersPf(concreteMembersSet)),
           ("Return types must be explicitly stated.", noReturnTypePf(concreteMembersSet)),
+          ("Abstract type members are not supported", abstractType),
           (s"""The return type of this method is not wrapped in $tparamName[_]. Methods like this can be
               |      added to the trait's companion object.""".stripMargin,
            nonMatchingKindPf(dslMembersSet ++ concreteMembersSet)),
@@ -175,9 +176,7 @@ object KTransImpl {
 
     private def concreteMembers: List[(Defn, Int)] =
       templateStatementsWithIdx.collect {
-        case (d: Defn.Def, i) => (d, i)
-        case (v: Defn.Val, i) => (v, i)
-        case (v: Defn.Type, i) => (v, i)
+        case (v: Defn, i) => (v, i)
       }.toList
 
     private def abstractMembers: List[(Decl, Int)] =
@@ -231,11 +230,16 @@ object KTransImpl {
       case v @ Decl.Val(mods, _, _) if mods.exists(isPrivate) && !exempt.contains(v) =>
         v
     }
+
     private def noReturnTypePf(exempt: Set[Stat]): StatPF = {
       case d @ Defn.Def(_, _, _, _, None, _) if !exempt.contains(d) =>
         d
       case v @ Defn.Val(_, _, None, _) if !exempt.contains(v) =>
         v
+    }
+
+    private def abstractType: StatPF = {
+      case t: Decl.Type => t
     }
 
     private def nonMatchingKindPf(exempt: Set[Stat]): StatPF = {
