@@ -4,8 +4,10 @@ Boilerplate free Tagless Final DSL macro annotation, written in [scala.meta](htt
 
 This library provides 2 macros:
 
-  1. [`@diesel`](#diesel) to make it easier to compose algebras together
+  1. [`@diesel`](#diesel) to make it easier to compose algebras together.
   2. [`@ktrans`](#ktrans) to make it easier to perform Kind transforms on interpreters.
+  
+To use diesel in your project, [add it to your build](#sbt). 
 
 ## `@diesel`
 
@@ -144,13 +146,6 @@ assert(MathsOptInterp.add(3, 10) == Some(13))
 There are conversions from Cat's natural transformation (`FunctionK`) or Scalaz's `NaturalTransformation` in the
 `diesel-cats` and `diesel-scalaz` companion projects.
 
-### Limitations
-
-  - Parameterised by a higher kinded type with just 1 type parameter
-  - No unimplemented methods that return types not contained by the type parameter of the algebra
-  - No unimplemented type members
-  - No vals that are not assignments
-
 ### How it works
 
 ```scala
@@ -181,6 +176,13 @@ trait Maths[G[_]] {
   }
 }
 ```
+
+### Limitations
+
+  - Annottee must be parameterised by a higher kinded type with just 1 type parameter (context bounds allowed though)
+  - No unimplemented methods that return types not contained by the type parameter of the algebra
+  - No unimplemented type members
+  - No vals that are not assignments
 
 ## Sbt
 
