@@ -19,7 +19,7 @@ lazy val root = Project(id = "diesel-root", base = file("."))
     publishArtifact := false,
     publishLocal := {}
   )
-  .aggregate(coreJs, coreJvm, examplesJs, examplesJvm)
+  .aggregate(coreJs, coreJvm, catsJs, catsJvm, scalazJs, scalazJvm, examplesJs, examplesJvm)
 
 lazy val core = crossProject
   .crossType(CrossType.Pure)
@@ -55,6 +55,34 @@ lazy val examples = crossProject
   .dependsOn(core)
 lazy val examplesJs  = examples.js
 lazy val examplesJvm = examples.jvm
+
+lazy val cats = crossProject
+  .crossType(CrossType.Pure)
+  .settings(
+    name := "diesel-cats",
+    commonSettings,
+    metaMacroSettings,
+    publishSettings,
+    testSettings,
+    libraryDependencies += "org.typelevel" %%% "cats-core" % catsVersion
+  )
+  .dependsOn(core)
+lazy val catsJs  = cats.js
+lazy val catsJvm = cats.jvm
+
+lazy val scalaz = crossProject
+  .crossType(CrossType.Pure)
+  .settings(
+    name := "diesel-scalaz",
+    commonSettings,
+    metaMacroSettings,
+    publishSettings,
+    testSettings,
+    libraryDependencies += "org.scalaz" %%% "scalaz-core" % "7.2.12"
+  )
+  .dependsOn(core)
+lazy val scalazJs  = scalaz.js
+lazy val scalazJvm = scalaz.jvm
 
 lazy val commonSettings: Seq[Def.Setting[_]] = Seq(
   organization := "com.beachape",
