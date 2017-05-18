@@ -1,26 +1,44 @@
 package diesel.internal
 
+import diesel.Defaults
+
 import scala.collection.immutable._
 import scala.meta._
 
 object KTransImpl {
 
-  def expand(defn: Tree): Stat = {
+  def expand(self: Tree, defn: Tree): Stat = {
+    val transKMethodName: Term.Name = {
+      val arg = self match {
+        case q"new $_(${Lit.String(s)})" => s
+        case _                           => Defaults.transformMethodName
+      }
+      Term.Name(arg)
+    }
+
     defn match {
       case SupportedAnnottee(extracted) => {
         val (algebraName, tparams, template) =
           (extracted.tname, extracted.tparams, extracted.template)
-        val tparam  = selectOneFunctor(tparams)
-        val builder = new TransformKMethBuilder(algebraName, tparam, template, extracted.ctorCall)
-        val meth    = builder.build()
+        val tparam = selectOneFunctor(tparams)
+        val builder = new TransformKMethBuilder(transKMethodName = transKMethodName,
+                                                algebraType = algebraName,
+                                                tparam = tparam,
+                                                template = template,
+                                                ctorRefBuilder = extracted.ctorCall)
+        val meth = builder.build()
         extracted.appendStat(meth)
       }
       case Term.Block(Seq(SupportedAnnottee(extracted), companion)) => {
         val (algebraName, tparams, template) =
           (extracted.tname, extracted.tparams, extracted.template)
-        val tparam  = selectOneFunctor(tparams)
-        val builder = new TransformKMethBuilder(algebraName, tparam, template, extracted.ctorCall)
-        val meth    = builder.build()
+        val tparam = selectOneFunctor(tparams)
+        val builder = new TransformKMethBuilder(transKMethodName = transKMethodName,
+                                                algebraType = algebraName,
+                                                tparam = tparam,
+                                                template = template,
+                                                ctorRefBuilder = extracted.ctorCall)
+        val meth = builder.build()
         Term.Block(
           Seq(
             extracted.appendStat(meth),
@@ -55,7 +73,8 @@ object KTransImpl {
         s"This annotation only supports types parameterised with one kind that takes one type argument, but you provided $tparams")
   }
 
-  private class TransformKMethBuilder(algebraType: Type.Name,
+  private class TransformKMethBuilder(transKMethodName: Term.Name,
+                                      algebraType: Type.Name,
                                       tparam: Type.Param,
                                       template: Template,
                                       ctorRefBuilder: Type => Ctor.Call) {
@@ -84,7 +103,7 @@ object KTransImpl {
       }
 
       q"""
-      final def transformK[$transformTargetK]($natTransArg: _root_.diesel.FunKLite[$tparamAsType, $targetKType]): $algebraType[$targetKType] = {
+      final def $transKMethodName[$transformTargetK]($natTransArg: _root_.diesel.FunKLite[$tparamAsType, $targetKType]): $algebraType[$targetKType] = {
         val $currentTraitPat = $selfRefTerm
         new $algebraTargetKConstructor {
           ..$forwardedAbstracts
