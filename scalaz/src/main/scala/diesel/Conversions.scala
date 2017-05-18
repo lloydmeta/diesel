@@ -1,10 +1,11 @@
 package diesel
 
-import scalaz.NaturalTransformation
+import scalaz._
+import scala.language.higherKinds
 
 object Conversions {
 
-  def naturalTransformToFunKLit[F[_], G[_]](functionK: NaturalTransformation[F, G]) =
+  def natTransToFunKLite[F[_], G[_]](functionK: F ~> G) =
     new FunKLite[F, G] {
       def apply[A](fa: F[A]): G[A] = functionK(fa)
     }

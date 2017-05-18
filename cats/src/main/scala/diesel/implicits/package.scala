@@ -1,13 +1,13 @@
 package diesel
 
-import cats.arrow.FunctionK
+import cats._
 
 import scala.language.implicitConversions
 import scala.language.higherKinds
 
 package object implicits {
 
-  implicit def functionKToFunKLite[F[_], G[_]](f: FunctionK[F, G]): FunKLite[F, G] =
-    Conversions.FunctionKToFunKLit(f)
+  implicit def functionKToFunKLite[F[_], G[_]](f: F ~> G): FunKLite[F, G] =
+    Conversions.funKToFunKLite(f)
 
 }
