@@ -52,7 +52,7 @@ lazy val examples = crossProject
     publishLocal := {},
     libraryDependencies += "org.typelevel" %%% "cats-core" % catsVersion
   )
-  .dependsOn(core)
+  .dependsOn(cats)
 lazy val examplesJs  = examples.js
 lazy val examplesJvm = examples.jvm
 

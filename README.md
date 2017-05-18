@@ -118,7 +118,6 @@ trait Maths[G[_]] {
   def times(l: Int, r: Int): G[Int]
 }
 
-
 val MathsIdInterp = new Maths[Id] {
   def add(l: Int, r: Int) = l + r
   def subtract(l: Int, r: Int) = l - r
@@ -134,6 +133,9 @@ val MathsOptInterp = MathsIdInterp.transformK(idToOpt)
 
 assert(MathsOptInterp.add(3, 10) == Some(13))
 ```
+
+There are conversions from Cat's natural transformation (`FunctionK`) or Scalaz's `NaturalTransformation` in the 
+`diesel-cats` and `diesel-scalaz` companion projects.
 
 ### Limitations
 
