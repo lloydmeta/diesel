@@ -1,6 +1,6 @@
 package diesel
 
-import cats.Monad
+import cats._
 import cats.kernel.Monoid
 
 object KtransAnnotationCompileTests {
@@ -78,4 +78,11 @@ object KtransAnnotationCompileTests {
     private[diesel] def packPriv(p: Byte): G[Byte]
   }
 
+}
+
+@ktrans
+trait Maths[G[_]] {
+  def add(l: Int, r: Int): G[Int]
+  def subtract(l: Int, r: Int): G[Int]
+  def times(l: Int, r: Int): G[Int]
 }
