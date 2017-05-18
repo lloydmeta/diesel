@@ -19,7 +19,7 @@ lazy val root = Project(id = "diesel-root", base = file("."))
     publishArtifact := false,
     publishLocal := {}
   )
-  .aggregate(coreJs, coreJvm, examplesJs, examplesJvm)
+  .aggregate(coreJs, coreJvm, catsJs, catsJvm, scalazJs, scalazJvm, examplesJs, examplesJvm)
 
 lazy val core = crossProject
   .crossType(CrossType.Pure)
@@ -52,9 +52,37 @@ lazy val examples = crossProject
     publishLocal := {},
     libraryDependencies += "org.typelevel" %%% "cats-core" % catsVersion
   )
-  .dependsOn(core)
+  .dependsOn(cats)
 lazy val examplesJs  = examples.js
 lazy val examplesJvm = examples.jvm
+
+lazy val cats = crossProject
+  .crossType(CrossType.Pure)
+  .settings(
+    name := "diesel-cats",
+    commonSettings,
+    metaMacroSettings,
+    publishSettings,
+    testSettings,
+    libraryDependencies += "org.typelevel" %%% "cats-core" % catsVersion
+  )
+  .dependsOn(core)
+lazy val catsJs  = cats.js
+lazy val catsJvm = cats.jvm
+
+lazy val scalaz = crossProject
+  .crossType(CrossType.Pure)
+  .settings(
+    name := "diesel-scalaz",
+    commonSettings,
+    metaMacroSettings,
+    publishSettings,
+    testSettings,
+    libraryDependencies += "org.scalaz" %%% "scalaz-core" % "7.2.12"
+  )
+  .dependsOn(core)
+lazy val scalazJs  = scalaz.js
+lazy val scalazJvm = scalaz.jvm
 
 lazy val commonSettings: Seq[Def.Setting[_]] = Seq(
   organization := "com.beachape",
@@ -103,6 +131,8 @@ lazy val metaMacroSettings: Seq[Def.Setting[_]] = Seq(
   // new-style macros.  This is similar to how it works for old-style macro
   // annotations and a dependency on macro paradise 2.x.
   addCompilerPlugin("org.scalameta" % "paradise" % "3.0.0-M8" cross CrossVersion.full),
+  // if your project uses multiple Scala versions, use this for cross building
+  addCompilerPlugin("org.spire-math" % "kind-projector" % "0.9.3" cross CrossVersion.binary),
   scalacOptions += "-Xplugin-require:macroparadise",
   // temporary workaround for https://github.com/scalameta/paradise/issues/10
   scalacOptions in (Compile, console) := Seq() // macroparadise plugin doesn't work in repl yet.

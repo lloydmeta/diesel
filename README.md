@@ -2,14 +2,14 @@
 
 Boilerplate free Tagless Final DSL macro annotation, written in [scala.meta](http://scalameta.org/) for future compatibility and other nice things (e.g. free IDE support, like in IntelliJ).
 
-## General idea
+## `@diesel`
 
-This plugin provides an annotation that cuts out the boilerplate associated with writing composable Tagless Final DSLs.
+The `@diesel` annotation that cuts out the boilerplate associated with writing composable Tagless Final DSLs.
 
 The Dsl can be accessed directly from the companion object if you import a converter located in `ops` 
 (customisable by passing a name to the annotation as an argument). This are useful when you need to compose multiple DSLs in the context of `F[_]`, but do not want to name all the interpreter parameters.
 
-Example:
+### Example:
 
 ```scala
 import diesel._, cats._, cats.implicits._
@@ -67,7 +67,7 @@ For more in-depth examples, check out:
   
 All of the above examples use a pure KVS interpreter :)
 
-## How it works
+### How it works
 
 ```scala
 @diesel
@@ -99,6 +99,84 @@ object Maths {
 
 ```
 
+
+## `@ktrans`
+
+There is also a handy `@ktrans` annotation that adds a `transformK` method to a trait that is parameterised by a Kind that
+takes 1 type parameter. It's useful when you want to transform any given implementation of that trait for `F[_]` into one
+ that implements it on `G[_]`
+ 
+### Example
+
+```scala
+import diesel._, cats._
+import diesel.implicits._
+
+@ktrans
+trait Maths[G[_]] {
+  def add(l: Int, r: Int): G[Int]
+  def subtract(l: Int, r: Int): G[Int]
+  def times(l: Int, r: Int): G[Int]
+}
+
+val MathsIdInterp = new Maths[Id] {
+  def add(l: Int, r: Int) = l + r
+  def subtract(l: Int, r: Int) = l - r
+  def times(l: Int, r: Int) = l * r
+}
+
+// Using kind-project syntax to build our natural transformation from
+// Id to Option
+val idToOpt =  λ[FunK[Id, Option]](Some(_))
+
+// use the auto-generated transformK method to create a Maths[Option] from Maths[Id] 
+// via idToOpt
+val MathsOptInterp = MathsIdInterp.transformK(idToOpt)
+
+assert(MathsOptInterp.add(3, 10) == Some(13))
+```
+
+There are conversions from Cat's natural transformation (`FunctionK`) or Scalaz's `NaturalTransformation` in the 
+`diesel-cats` and `diesel-scalaz` companion projects.
+
+### Limitations
+
+  - Parameterised by a higher kinded type with just 1 type parameter
+  - No unimplemented methods that return types not contained by the type parameter of the algebra
+  - No unimplemented type members
+  - No vals that are not assignments
+  
+### How it works
+
+```scala
+@ktrans
+trait Maths[G[_]] {
+  def add(l: Int, r: Int): G[Int]
+  def subtract(l: Int, r: Int): G[Int]
+  def times(l: Int, r: Int): G[Int]
+}
+```
+
+is expanded into
+
+```scala
+trait Maths[G[_]] {
+  def add(l: Int, r: Int): G[Int]
+  def subtract(l: Int, r: Int): G[Int]
+  def times(l: Int, r: Int): G[Int]
+  
+  // Note that FunK is a really simple NaturalTransform / FunctionK
+  final def transformK[H[_]](natTrans: FunK[G, H]): Maths[H] = {
+    val curr = this
+    new Maths[H] {
+      def add(l: Int, r: Int): H[Int] = natTrans(curr.add(l, r))
+      def subtract(l: Int, r: Int): H[Int] = natTrans(curr.subtract(l, r))
+      def times(l: Int, r: Int): H[Int] = natTrans(curr.times(l, r))
+    }
+  }
+}
+```
+
 ## Sbt
 
 [![Maven Central](https://maven-badges.herokuapp.com/maven-central/com.beachape/diesel-core_2.11/badge.svg)](https://maven-badges.herokuapp.com/maven-central/com.beachape/diesel-core_2.11)
@@ -123,7 +201,6 @@ addCompilerPlugin(
 scalacOptions += "-Xplugin-require:macroparadise"
 
 ```
-
 
 # Credit
 
