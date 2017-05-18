@@ -15,6 +15,10 @@ trait SupportedAnnottee {
 
   def underlying: Stat
 
+  def appendStat(stat: Stat): Stat
+
+  def ctorCall(tpe: Type): Ctor.Call
+
 }
 
 case class TraitAnnottee(mods: Seq[Mod],
@@ -26,6 +30,16 @@ case class TraitAnnottee(mods: Seq[Mod],
   def underlying: Stat = {
     q"..$mods trait $tname[..$tparams] extends $template"
   }
+
+  def appendStat(stat: Stat): Stat = {
+    val newTempl =
+      template.copy(stats = template.stats.map(s => s :+ stat).orElse(Some(Seq(stat))))
+    q"..$mods trait $tname[..$tparams] extends $newTempl"
+  }
+
+  def ctorCall(tpe: Type): Ctor.Call = {
+    Term.ApplyType(Ctor.Ref.Name(tname.value), Seq(tpe))
+  }
 }
 
 case class ClassAnnottee(mods: Seq[Mod],
@@ -36,6 +50,18 @@ case class ClassAnnottee(mods: Seq[Mod],
     extends SupportedAnnottee {
   def underlying: Stat = {
     Defn.Class(mods, tname, tparams, ctor, template)
+  }
+
+  def appendStat(stat: Stat): Stat = {
+    val newTempl =
+      template.copy(stats = template.stats.map(s => s :+ stat).orElse(Some(Seq(stat))))
+    Defn.Class(mods, tname, tparams, ctor, newTempl)
+  }
+
+  def ctorCall(tpe: Type): Ctor.Call = {
+    val ctorRef = Ctor.Ref.Name(tname.value)
+    val args    = ctor.paramss.map(_.map(p => Term.Name(p.name.value)))
+    ctor"$ctorRef[$tpe](...$args)"
   }
 }
 

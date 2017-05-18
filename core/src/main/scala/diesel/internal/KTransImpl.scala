@@ -7,29 +7,50 @@ object KTransImpl {
 
   def expand(defn: Tree): Stat = {
     defn match {
-      case t @ Defn.Trait(_, algebraName, Seq(tparam), _, template) => {
-        val builder = new KTransformBuilder(algebraName, tparam, template)
+      case SupportedAnnottee(extracted) => {
+        val (algebraName, tparams, template) =
+          (extracted.tname, extracted.tparams, extracted.template)
+        val tparam  = selectOneFunctor(tparams)
+        val builder = new KTransformBuilder(algebraName, tparam, template, extracted.ctorCall)
         val meth    = builder.build()
-        t.copy(
-          templ = template.copy(
-            stats = template.stats.map(existing => existing :+ meth).orElse(Some(Seq(meth)))))
+        extracted.appendStat(meth)
+      }
+      case Term.Block(Seq(SupportedAnnottee(extracted), companion)) => {
+        val (algebraName, tparams, template) =
+          (extracted.tname, extracted.tparams, extracted.template)
+        val tparam  = selectOneFunctor(tparams)
+        val builder = new KTransformBuilder(algebraName, tparam, template, extracted.ctorCall)
+        val meth    = builder.build()
+        Term.Block(
+          Seq(
+            extracted.appendStat(meth),
+            companion
+          )
+        )
       }
       case _ => abort(s"Unsupported annottee ${defn.syntax}")
     }
   }
 
   private val currentTraitHandle = Term.Name("curr")
-  private val currentTraitPat = Pat.Var.Term(currentTraitHandle)
+  private val currentTraitPat    = Pat.Var.Term(currentTraitHandle)
 
   private val natTransArg = Term.Name("natTrans")
 
-  private class KTransformBuilder(algebraType: Type.Name, tparam: Type.Param, template: Template) {
+  private def selectOneFunctor(tparams: Seq[Type.Param]): Type.Param = tparams match {
+    case Seq(tparam) if tparam.tparams.size == 1 => tparam
+    case _ =>
+      abort(
+        s"This annotation only supports types parameterised with a kind that takes one type argument, but you provided $tparams")
+  }
 
-    private val selfRef     = template.self
+  private class KTransformBuilder(algebraType: Type.Name, tparam: Type.Param, template: Template, ctorRefBuilder: Type => Ctor.Call) {
+
+    private val selfRef = template.self
     private val selfRefTerm: Term.Name = {
       if (selfRef.name.value == Name.Anonymous().value) {
         Term.Name("this")
-      } else  {
+      } else {
         Term.Name(selfRef.name.value)
       }
     }
@@ -44,8 +65,7 @@ object KTransImpl {
     private val templateStatements        = template.stats.toSeq.flatten
     private val templateStatementsWithIdx = templateStatements.zipWithIndex
 
-    private val algebraTargetKConstructor =
-      Term.ApplyType(Ctor.Ref.Name(algebraType.value), Seq(targetKType))
+    private val algebraTargetKConstructor = ctorRefBuilder(targetKType)
 
     def build(): Defn.Def = {
       // Extract common variables
@@ -61,10 +81,11 @@ object KTransImpl {
           val tparamTypes = tparams.map(tp => Type.Name(tp.name.value))
           val paramNames  = paramss.map(_.map(tp => Term.Name(tp.name.value)))
           val newdeclTpe  = Type.Apply(targetKType, declTpeParams)
-          val body        = if (tparamTypes.nonEmpty)
-            q"""$natTransArg.apply($currentTraitHandle.$name[..$tparamTypes](...$paramNames))"""
-          else
-            q"""$natTransArg($currentTraitHandle.$name(...$paramNames))"""
+          val body =
+            if (tparamTypes.nonEmpty)
+              q"""$natTransArg.apply($currentTraitHandle.$name[..$tparamTypes](...$paramNames))"""
+            else
+              q"""$natTransArg($currentTraitHandle.$name(...$paramNames))"""
           Defn.Def(mods, name, tparams, paramss, Some(newdeclTpe), body)
         }
         case _ => ???
