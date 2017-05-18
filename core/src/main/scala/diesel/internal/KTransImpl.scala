@@ -74,13 +74,15 @@ object KTransImpl {
       // Extract common variables
 
       val abstractsWithIdx = abstractMembers
+      val concretesWithIdx = concreteMembers
 
       val abstracts = abstractsWithIdx.map(_._1)
+      val concretes = concretesWithIdx.map(_._1)
 
-      ensureSoundMembers(abstracts)
+      ensureSoundMembers(abstracts, concretes)
 
       val wrappedAbstracts = abstracts.map {
-        case meth @ Decl.Def(mods, name, tparams, paramss, Type.Apply(_, declTpeParams)) => {
+        case Decl.Def(mods, name, tparams, paramss, Type.Apply(_, declTpeParams)) => {
           val tparamTypes = tparams.map(tp => Type.Name(tp.name.value))
           val paramNames  = paramss.map(_.map(tp => Term.Name(tp.name.value)))
           val newdeclTpe  = Type.Apply(targetKType, declTpeParams)
@@ -91,7 +93,6 @@ object KTransImpl {
               q"""$natTransArg($currentTraitHandle.$name(...$paramNames))"""
           Defn.Def(mods, name, tparams, paramss, Some(newdeclTpe), body)
         }
-        case _ => ???
       }
 
       val transformKMeth =
@@ -104,19 +105,20 @@ object KTransImpl {
       transformKMeth
     }
 
-    private def ensureSoundMembers(dslMembers: List[Stat]): Unit = {
+    private def ensureSoundMembers(dslMembers: List[Stat], concreteMembers: List[Stat]): Unit = {
       val dslMembersSet = dslMembers.toSet
+      val concreteMembersSet = concreteMembers.toSet
       // The spaces in multiline strings are significant
       val statsWithErrors = findErrors(
         Seq(
-          ("Please use only package private modifiers.", privateMembersPf(Set.empty)),
-          ("Return types must be explicitly stated.", noReturnTypePf(Set.empty)),
+          ("Please use only package private modifiers.", privateMembersPf(concreteMembersSet)),
+          ("Return types must be explicitly stated.", noReturnTypePf(concreteMembersSet)),
           (s"""The return type of this method is not wrapped in $tparamName[_]. Methods like this can be
               |      added to the trait's companion object.""".stripMargin,
-           nonMatchingKindPf(dslMembersSet ++ Set.empty)),
+           nonMatchingKindPf(dslMembersSet ++ concreteMembersSet)),
           ("Vars are not allowed.", varsPf(Set.empty)),
           ("Vals that are not assignments are not allowed at the moment",
-           patternMatchingVals(Set.empty)),
+           patternMatchingVals(concreteMembersSet)),
           (s"""This method has a type parameter that shadows the $tparamName[_] used to annotate the trait.
               |      Besides being confusing for readers of your code, this is not currently supported by diesel.""".stripMargin,
            methodsShadowingTParamPF)
@@ -138,7 +140,7 @@ object KTransImpl {
 
       val erroneousStats = statsWithErrors.map(_._1).toSet
       val genUnsupportedStats = templateStatements.filterNot { s =>
-        erroneousStats.contains(s) || dslMembersSet.contains(s)
+        erroneousStats.contains(s) || dslMembersSet.contains(s) || concreteMembersSet.contains(s)
       }
       val genUnsupportedErrs = {
         if (genUnsupportedStats.nonEmpty) {

@@ -55,6 +55,8 @@ class KTransSpec {
 
   @ktrans
   abstract class AbsClassWithCBoundAndParams[G[_]: Monad](age: Int)(name: String) { lulz =>
+    val eh: Int = 3
+
     def noArg: G[Int]
     def ser[A: Monoid](k: String, o: A): G[Unit]
     def des[A: Monoid](k: String): G[Option[A]]
