@@ -3,7 +3,7 @@ package diesel
 import cats.Monad
 import cats.kernel.Monoid
 
-class KTransSpec {
+object KtransAnnotationCompileTests {
 
   @ktrans
   trait Trait1[F[_]] {
@@ -13,10 +13,10 @@ class KTransSpec {
     def des[A: Monoid](k: String): F[Option[A]]
     def paramss[A](k: String)(i: Int): F[Int]
 
-    protected [diesel] def packProt(p: Byte): F[Byte]
+    protected[diesel] def packProt(p: Byte): F[Byte]
     protected def prot(p: Byte): F[Byte]
 
-    private [diesel] def packPriv(p: Byte): F[Byte]
+    private[diesel] def packPriv(p: Byte): F[Byte]
   }
 
   @ktrans
@@ -26,10 +26,10 @@ class KTransSpec {
     def des[A: Monoid](k: String): F[Option[A]]
     def paramss[A](k: String)(i: Int): F[Int]
 
-    protected [diesel] def packProt(p: Byte): F[Byte]
+    protected[diesel] def packProt(p: Byte): F[Byte]
     protected def prot(p: Byte): F[Byte]
 
-    private [diesel] def packPriv(p: Byte): F[Byte]
+    private[diesel] def packPriv(p: Byte): F[Byte]
   }
 
   object TraitWithComp {
@@ -43,10 +43,10 @@ class KTransSpec {
     def des[A: Monoid](k: String): G[Option[A]]
     def paramss[A](k: String)(i: Int): G[Int]
 
-    protected [diesel] def packProt(p: Byte): G[Byte]
+    protected[diesel] def packProt(p: Byte): G[Byte]
     protected def prot(p: Byte): G[Byte]
 
-    private [diesel] def packPriv(p: Byte): G[Byte]
+    private[diesel] def packPriv(p: Byte): G[Byte]
   }
 
   @ktrans
@@ -56,10 +56,10 @@ class KTransSpec {
     def des[A: Monoid](k: String): G[Option[A]]
     def paramss[A](k: String)(i: Int): G[Int]
 
-    protected [diesel] def packProt(p: Byte): G[Byte]
+    protected[diesel] def packProt(p: Byte): G[Byte]
     protected def prot(p: Byte): G[Byte]
 
-    private [diesel] def packPriv(p: Byte): G[Byte]
+    private[diesel] def packPriv(p: Byte): G[Byte]
   }
 
   @ktrans
@@ -72,11 +72,10 @@ class KTransSpec {
     def des[A: Monoid](k: String): G[Option[A]]
     def paramss[A](k: String)(i: Int): G[Int]
 
-    protected [diesel] def packProt(p: Byte): G[Byte]
+    protected[diesel] def packProt(p: Byte): G[Byte]
     protected def prot(p: Byte): G[Byte]
 
-    private [diesel] def packPriv(p: Byte): G[Byte]
+    private[diesel] def packPriv(p: Byte): G[Byte]
   }
-
 
 }

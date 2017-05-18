@@ -11,7 +11,7 @@ object KTransImpl {
         val (algebraName, tparams, template) =
           (extracted.tname, extracted.tparams, extracted.template)
         val tparam  = selectOneFunctor(tparams)
-        val builder = new KTransformBuilder(algebraName, tparam, template, extracted.ctorCall)
+        val builder = new TransformKMethBuilder(algebraName, tparam, template, extracted.ctorCall)
         val meth    = builder.build()
         extracted.appendStat(meth)
       }
@@ -19,7 +19,7 @@ object KTransImpl {
         val (algebraName, tparams, template) =
           (extracted.tname, extracted.tparams, extracted.template)
         val tparam  = selectOneFunctor(tparams)
-        val builder = new KTransformBuilder(algebraName, tparam, template, extracted.ctorCall)
+        val builder = new TransformKMethBuilder(algebraName, tparam, template, extracted.ctorCall)
         val meth    = builder.build()
         Term.Block(
           Seq(
@@ -40,6 +40,14 @@ object KTransImpl {
   private val currentTraitPat    = Pat.Var.Term(currentTraitHandle)
   private val natTransArg        = Term.Name("natTrans")
 
+  private val tparamChars: Seq[Char] = ('G' to 'Z') ++ ('A' to 'F')
+
+  private def pickOther(tpname: Type.Param.Name): Type.Name = {
+    val k     = tpname.value
+    val other = tparamChars.collectFirst { case c if k != s"$c" => s"$c" }.getOrElse("Z")
+    Type.Name(other)
+  }
+
   private def selectOneFunctor(tparams: Seq[Type.Param]): Type.Param = tparams match {
     case Seq(tparam) if tparam.tparams.size == 1 => tparam
     case _ =>
@@ -47,43 +55,13 @@ object KTransImpl {
         s"This annotation only supports types parameterised with one kind that takes one type argument, but you provided $tparams")
   }
 
-  private class KTransformBuilder(algebraType: Type.Name,
-                                  tparam: Type.Param,
-                                  template: Template,
-                                  ctorRefBuilder: Type => Ctor.Call) {
-
-    private val selfRef = template.self
-    private val selfRefTerm: Term.Name = {
-      if (selfRef.name.value == Name.Anonymous().value) {
-        Term.Name("this")
-      } else {
-        Term.Name(selfRef.name.value)
-      }
-    }
-
-    private val targetKName      = pickOther(tparam.name.value)
-    private val targetKType      = Type.Name(targetKName)
-    private val transformTargetK = tparam.copy(name = targetKType)
-
-    private val boundlessTParam           = tparam.copy(cbounds = Nil)
-    private val tparamName                = tparam.name.value
-    private val tparamAsType              = Type.fresh().copy(tparamName)
-    private val templateStatements        = template.stats.toSeq.flatten
-    private val templateStatementsWithIdx = templateStatements.zipWithIndex
-
-    private val algebraTargetKConstructor = ctorRefBuilder(targetKType)
+  private class TransformKMethBuilder(algebraType: Type.Name,
+                                      tparam: Type.Param,
+                                      template: Template,
+                                      ctorRefBuilder: Type => Ctor.Call) {
 
     def build(): Defn.Def = {
-      // Extract common variables
-
-      val abstractsWithIdx = abstractMembers
-      val concretesWithIdx = concreteMembers
-
-      val abstracts = abstractsWithIdx.map(_._1)
-      val concretes = concretesWithIdx.map(_._1)
-
-      ensureSoundMembers(abstracts, concretes)
-
+      ensureSoundMembers()
       val forwardedAbstracts = abstracts.flatMap {
         case Decl.Val(mods, pats, Type.Apply(_, declTpeParams)) => {
           val newdeclTpe = Type.Apply(targetKType, declTpeParams)
@@ -105,19 +83,18 @@ object KTransImpl {
         }
       }
 
-      val transformKMeth =
-        q"""final def transformK[$transformTargetK]($natTransArg: _root_.diesel.LiteFunK[$tparamAsType, $targetKType]): $algebraType[$targetKType] = {
-            val $currentTraitPat = $selfRefTerm
-            new $algebraTargetKConstructor {
-              ..$forwardedAbstracts
-            }
-          }"""
-      transformKMeth
+      q"""
+      final def transformK[$transformTargetK]($natTransArg: _root_.diesel.LiteFunK[$tparamAsType, $targetKType]): $algebraType[$targetKType] = {
+        val $currentTraitPat = $selfRefTerm
+        new $algebraTargetKConstructor {
+          ..$forwardedAbstracts
+        }
+      }"""
     }
 
-    private def ensureSoundMembers(dslMembers: List[Stat], concreteMembers: List[Stat]): Unit = {
-      val dslMembersSet      = dslMembers.toSet
-      val concreteMembersSet = concreteMembers.toSet
+    private def ensureSoundMembers(): Unit = {
+      val dslMembersSet      = (abstracts: List[Stat]).toSet
+      val concreteMembersSet = (concretes: List[Stat]).toSet
       // The spaces in multiline strings are significant
       val statsWithErrors = findErrors(
         Seq(
@@ -125,13 +102,13 @@ object KTransImpl {
           ("Return types must be explicitly stated.", noReturnTypePf(concreteMembersSet)),
           ("Abstract type members are not supported", abstractType),
           (s"""The return type of this method is not wrapped in $tparamName[_]. Methods like this can be
-              |      added to the trait's companion object.""".stripMargin,
+              |added to the trait's companion object.""".stripMargin,
            nonMatchingKindPf(dslMembersSet ++ concreteMembersSet)),
           ("Vars are not allowed.", varsPf(Set.empty)),
           ("Vals that are not assignments are not allowed at the moment",
            patternMatchingVals(concreteMembersSet)),
           (s"""This method has a type parameter that shadows the $tparamName[_] used to annotate the trait.
-              |      Besides being confusing for readers of your code, this is not currently supported by diesel.""".stripMargin,
+              |Besides being confusing for readers of your code, this is not currently supported by diesel.""".stripMargin,
            methodsShadowingTParamPF)
         )
       )
@@ -179,26 +156,41 @@ object KTransImpl {
       }
     }
 
-    private def concreteMembers: List[(Defn, Int)] =
-      templateStatementsWithIdx.collect {
-        case (v: Defn, i) => (v, i)
+    private val selfRef = template.self
+    private val selfRefTerm: Term.Name =
+      if (selfRef.name.value == Name.Anonymous().value)
+        Term.Name("this") // no name
+      else
+        Term.Name(selfRef.name.value)
+
+    private val targetKType      = pickOther(tparam.name)
+    private val transformTargetK = tparam.copy(name = targetKType)
+
+    private val tparamName         = tparam.name.value
+    private val tparamAsType       = Type.fresh().copy(tparamName)
+    private val templateStatements = template.stats.toSeq.flatten
+
+    private val algebraTargetKConstructor = ctorRefBuilder(targetKType)
+
+    private val concretes: List[Defn] =
+      templateStatements.collect {
+        case v: Defn => v
       }.toList
 
-    private def abstractMembers: List[(Decl, Int)] =
-      templateStatementsWithIdx.collect {
-        case (d @ Decl.Def(_, _, _, _, Type.Apply(retName: Type.Select, _)), i)
+    private val abstracts: List[Decl] =
+      templateStatements.collect {
+        case d @ Decl.Def(_, _, _, _, Type.Apply(retName: Type.Select, _))
             if retName.name.value == tparamName =>
-          (d, i)
-        case (v @ Decl.Val(_, _, Type.Apply(retName: Type.Select, _)), i)
+          d
+        case v @ Decl.Val(_, _, Type.Apply(retName: Type.Select, _))
             if retName.name.value == tparamName =>
-          (v, i)
-
-        case (d @ Decl.Def(_, _, _, _, Type.Apply(retName: Type.Name, _)), i)
+          v
+        case d @ Decl.Def(_, _, _, _, Type.Apply(retName: Type.Name, _))
             if retName.value == tparamName =>
-          (d, i)
-        case (v @ Decl.Val(_, _, Type.Apply(retName: Type.Name, _)), i)
+          d
+        case v @ Decl.Val(_, _, Type.Apply(retName: Type.Name, _))
             if retName.value == tparamName =>
-          (v, i)
+          v
       }.toList
 
     private def findErrors(
@@ -270,10 +262,5 @@ object KTransImpl {
     }
 
   }
-
-  private val tparamNames: Seq[Char] = ('G' to 'Z') ++ ('A' to 'F')
-
-  private def pickOther(k: String): String =
-    tparamNames.collectFirst { case c if k != s"$c" => s"$c" }.getOrElse("Z")
 
 }
