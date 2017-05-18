@@ -117,17 +117,20 @@ object KTransImpl {
       // The spaces in multiline strings are significant
       val statsWithErrors = findErrors(
         Seq(
+          (
+            s"""Abstract methods with parameters that have types parameterised by the same kind as the annottee
+               |     ($tparamName[_]) are not supported""".stripMargin, paramsParameterisedByKind),
           ("Please use only package private modifiers.", privateMembersPf(concreteMembersSet)),
           ("Return types must be explicitly stated.", noReturnTypePf(concreteMembersSet)),
           ("Abstract type members are not supported", abstractType),
           (s"""The return type of this method is not wrapped in $tparamName[_]. Methods like this can be
-              |added to the trait's companion object.""".stripMargin,
+              |    added to the trait's companion object.""".stripMargin,
            nonMatchingKindPf(dslMembersSet ++ concreteMembersSet)),
           ("Vars are not allowed.", varsPf(Set.empty)),
           ("Vals that are not assignments are not allowed at the moment",
            patternMatchingVals(concreteMembersSet)),
           (s"""This method has a type parameter that shadows the $tparamName[_] used to annotate the trait.
-              |Besides being confusing for readers of your code, this is not currently supported by diesel.""".stripMargin,
+              |    Besides being confusing for readers of your code, this is not currently supported by diesel.""".stripMargin,
            methodsShadowingTParamPF)
         )
       )
@@ -157,7 +160,7 @@ object KTransImpl {
             }
             .mkString("\n\n")
           Seq(
-            s"""The following are not supported inside the body of a trait annotated with @diesel. If possible, please consider
+            s"""The following are not supported inside the body of a trait annotated with @ktrans. If possible, please consider
                |moving them into a companion object:
                |
                |$statsStrs""".stripMargin)
@@ -169,7 +172,7 @@ object KTransImpl {
 
         abort(s"""
                  |
-                 |Looks like you're using some unsupported syntax in a trait annotated with @diesel.
+                 |Looks like you're using some unsupported syntax in a trait annotated with @ktrans.
                  |
                  |$errsMsg""".stripMargin)
       }
@@ -252,6 +255,18 @@ object KTransImpl {
         d
       case v @ Defn.Val(_, _, None, _) if !exempt.contains(v) =>
         v
+    }
+
+    private def paramsParameterisedByKind: StatPF = {
+      case d: Decl.Def if paramssParameterisedByKind(d.paramss) => d
+    }
+
+    private def paramssParameterisedByKind(paramss: Seq[Seq[Term.Param]]) = {
+      val flattened = paramss.flatten
+      flattened.collectFirst {
+        case p @ Term.Param(_, _, Some(Type.Apply(Type.Name(s), _)), _)
+          if s == tparamName => p
+      }.nonEmpty
     }
 
     private def abstractType: StatPF = {
