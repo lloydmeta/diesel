@@ -125,10 +125,12 @@ val MathsIdInterp = new Maths[Id] {
   def times(l: Int, r: Int) = l * r
 }
 
-// Using kind-project syntax
-val idToOpt =  λ[Id ~> Option](Some(_))
+// Using kind-project syntax to build our natural transformation from
+// Id to Option
+val idToOpt =  λ[FunK[Id, Option]](Some(_))
 
-// use the auto-generated transformK method to create a Maths[Option] from Maths[Id]
+// use the auto-generated transformK method to create a Maths[Option] from Maths[Id] 
+// via idToOpt
 val MathsOptInterp = MathsIdInterp.transformK(idToOpt)
 
 assert(MathsOptInterp.add(3, 10) == Some(13))
@@ -162,6 +164,8 @@ trait Maths[G[_]] {
   def add(l: Int, r: Int): G[Int]
   def subtract(l: Int, r: Int): G[Int]
   def times(l: Int, r: Int): G[Int]
+  
+  // Note that FunK is a really simple NaturalTransform / FunctionK
   final def transformK[H[_]](natTrans: FunK[G, H]): Maths[H] = {
     val curr = this
     new Maths[H] {
