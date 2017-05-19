@@ -11,7 +11,7 @@ To use diesel in your project, [add it to your build](#sbt).
 
 ## `@diesel`
 
-The `@diesel` annotation that cuts out the boilerplate associated with writing composable Tagless Final DSLs.
+The `@diesel` annotation cuts out the boilerplate associated with writing composable Tagless Final DSLs.
 
 The Dsl can be accessed directly from the companion object if you import a converter located in `ops`
 (customisable by passing a name to the annotation as an argument). This are useful when you need to compose multiple DSLs in the context of `F[_]`, but do not want to name all the interpreter parameters.
@@ -23,7 +23,7 @@ Note that this can be used along-side `@ktrans`.
 ```scala
 import diesel._, cats._, cats.implicits._
 
-object DieselDemo  {
+object DieselDemo {
 
   // Declare your DSL
   @diesel
@@ -39,34 +39,38 @@ object DieselDemo  {
 
   // Import companion-to-interpreter aliasing sugar
   import Maths.ops._, Logger.ops._
+
   def prog[F[_]: Monad: Maths: Logger](x: Int, y: Int): F[Int] = {
     for {
       p <- Maths.times(x, y)
       _ <- Logger.info(s"Product: $p")
       s <- Maths.add(x, y)
       _ <- Logger.info(s"Sum: $s")
-    } yield p + s
+      f <- Maths.add(p, s)
+      _ <- Logger.info(s"Final: $s")
+    } yield f
   }
 
   def main(args: Array[String]): Unit = {
 
-    // Wire our interpreters in
+    // Wire in our interpreters
     implicit val mathsInterp = new Maths[Id] {
       def times(l: Int, r: Int) = l * r
       def add(l: Int, r: Int)   = l + r
     }
     implicit val loggingInterp = new Logger[Id] {
-      def info(msg: String)           = println(msg)
+      def info(msg: String) = println(msg)
     }
 
-    val _ = prog[Id](1, 2)
+    val _ = prog[Id](3, 4)
   }
 
 }
 /*
 [info] Running DieselDemo
-Product: 2
-Sum: 3
+Product: 12
+Sum: 7
+Final: 7
 */
 ```
 
@@ -103,7 +107,7 @@ object Maths {
   def apply[F[_]](implicit m: Maths[F]): Maths[F] = m
 
   // In charge of aliasing your singleton Maths object to an in-scope Maths[F] :)
-  object op {
+  object ops {
     implicit def toDsl[F[_]](o: Maths.type)(implicit m: Maths[F]): Maths[F] = m
   }
 }
@@ -113,9 +117,10 @@ object Maths {
 
 ## `@ktrans`
 
-There is also a handy `@ktrans` annotation that adds a `transformK` method to a trait that is parameterised by a Kind that
-takes 1 type parameter. It's useful when you want to transform any given implementation of that trait for `F[_]` into one
- that implements it on `G[_]`.
+The `@ktrans` annotation adds a `transformK` method to a trait that is parameterised by a Kind that takes 1 type parameter. 
+It's handy when you want to transform any given implementation of that trait on `F[_]` into one that implements it on `G[_]`.
+
+Useful because it saves you from having to write your boilerplate (method forwarding and results wrapping).
  
 Note that this can be used along-side `@diesel`.
 
