@@ -24,7 +24,7 @@ object DieselImpl {
         Term.Block(
           Seq(
             extracted.underlying,
-            q"""..${objectModsOnly(mods)} object ${Term.Name(tname.value)} {
+            q"""..${modsForGeneratedCompanion(mods)} object ${Term.Name(tname.value)} {
                $algebraAlias
                $singletonAlias
                $applyMethod
@@ -65,7 +65,8 @@ object DieselImpl {
     }
   }
 
-  private def objectModsOnly(ms: Seq[Mod]): Seq[Mod] = ms.filter {
+  private def modsForGeneratedCompanion(ms: Seq[Mod]): Seq[Mod] = ms.filter {
+    case _: Mod.Annot  => false
     case mod"final"    => false
     case mod"abstract" => false
     case mod"sealed"   => false

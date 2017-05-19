@@ -16,6 +16,8 @@ The `@diesel` annotation that cuts out the boilerplate associated with writing c
 The Dsl can be accessed directly from the companion object if you import a converter located in `ops`
 (customisable by passing a name to the annotation as an argument). This are useful when you need to compose multiple DSLs in the context of `F[_]`, but do not want to name all the interpreter parameters.
 
+Note that this can be used along-side `@ktrans`.
+
 ### Example:
 
 ```scala
@@ -26,8 +28,8 @@ object DieselDemo  {
   // Declare your DSL
   @diesel
   trait Maths[F[_]] {
-    def int(i: Int): F[Int]
-    def add(l: F[Int], r: F[Int]): F[Int]
+    def times(l: Int, r: Int): F[Int]
+    def add(l: Int, r: Int): F[Int]
   }
 
   @diesel
@@ -37,32 +39,34 @@ object DieselDemo  {
 
   // Import companion-to-interpreter aliasing sugar
   import Maths.ops._, Logger.ops._
-  def addAndLog[F[_]: Monad: Maths: Logger](x: Int, y: Int): F[Int] = {
+  def prog[F[_]: Monad: Maths: Logger](x: Int, y: Int): F[Int] = {
     for {
-      r <- Maths.add(Maths.int(x), Maths.int(y))
-      _ <- Logger.info(s"result $r")
-    } yield r
+      p <- Maths.times(x, y)
+      _ <- Logger.info(s"Product: $p")
+      s <- Maths.add(x, y)
+      _ <- Logger.info(s"Sum: $s")
+    } yield p + s
   }
 
   def main(args: Array[String]): Unit = {
 
     // Wire in our interpreters
     implicit val mathsInterp = new Maths[Id] {
-      def int(a: Int)                 = a
-      def add(a: Id[Int], b: Id[Int]) = a + b
+      def times(l: Int, r: Int) = l * r
+      def add(l: Int, r: Int)   = l + r
     }
     implicit val loggingInterp = new Logger[Id] {
       def info(msg: String)           = println(msg)
     }
 
-    addAndLog[Id](1, 2)
-    ()
+    val _ = prog[Id](1, 2)
   }
 
 }
 /*
 [info] Running DieselDemo
-result 3
+Product: 2
+Sum: 3
 */
 ```
 
@@ -79,8 +83,8 @@ All of the above examples use a pure KVS interpreter :)
 ```scala
 @diesel
 trait Maths[F[_]] {
-  def int(i: Int): F[Int]
-  def add(l: F[Int], r: F[Int]): F[Int]
+  def times(l: Int, r: Int): F[Int]
+  def add(l: Int, r: Int): F[Int]
 }
 ```
 
@@ -89,8 +93,8 @@ is expanded approximately into
 ```scala
 // Your algebra. Implement by providing a concrete F and you have your interpreter
 trait Maths[F[_]] {
-    def int(i: Int): F[Int]
-    def add(l: F[Int], r: F[Int]): F[Int]
+    def times(l: Int, r: Int): F[Int]
+    def add(l: Int, r: Int): F[Int]
 }
 
 // Helper methods will be added to the algebra's companion object (one will be created if there isn't one yet)
@@ -111,7 +115,9 @@ object Maths {
 
 There is also a handy `@ktrans` annotation that adds a `transformK` method to a trait that is parameterised by a Kind that
 takes 1 type parameter. It's useful when you want to transform any given implementation of that trait for `F[_]` into one
- that implements it on `G[_]`
+ that implements it on `G[_]`.
+ 
+Note that this can be used along-side `@diesel`.
 
 ### Example
 

@@ -5,7 +5,7 @@ import cats.kernel.Monoid
 
 object KtransAnnotationCompileTests {
 
-  @ktrans
+  @ktrans @diesel
   trait Trait1[F[_]] {
     val vlaThing, vlaThing2: F[Int]
     def noArg: F[Int]
@@ -19,7 +19,7 @@ object KtransAnnotationCompileTests {
     private[diesel] def packPriv(p: Byte): F[Byte]
   }
 
-  @ktrans
+  @diesel @ktrans
   trait TraitWithComp[F[_]] {
     def noArg: F[Int]
     def ser[A: Monoid](k: String, o: A): F[Unit]

@@ -21,6 +21,7 @@ import scala.annotation.compileTimeOnly
   *      | // Declare our DSL
   *      | @diesel
   *      | trait Maths[G[_]] {
+  *      |   def times(l: Int, r: Int): G[Int]
   *      |   def add(l: Int, r: Int): G[Int]
   *      | }
   *      | @diesel
@@ -39,7 +40,8 @@ import scala.annotation.compileTimeOnly
   *      | }
   *
   * scala> implicit val MathsIdInterp = new Maths[Id] {
-  *      |   def add(l: Int, r: Int) = l + r
+  *      |   def times(l: Int, r: Int) = l * r
+  *      |   def add(l: Int, r: Int)   = l + r
   *      | }
   *
   * scala> implicit val LoggerIdInterp = new Logger[Id] {
