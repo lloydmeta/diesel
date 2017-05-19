@@ -1,6 +1,6 @@
 # Diesel [![Build Status](https://travis-ci.org/lloydmeta/diesel.svg?branch=master)](https://travis-ci.org/lloydmeta/diesel) [![Maven Central](https://maven-badges.herokuapp.com/maven-central/com.beachape/diesel-core_2.11/badge.svg)](https://maven-badges.herokuapp.com/maven-central/com.beachape/diesel-core_2.11) [![Scala.js](https://www.scala-js.org/assets/badges/scalajs-0.6.15.svg)](https://www.scala-js.org)
 
-Boilerplate free Tagless Final DSL macro annotation, written in [scala.meta](http://scalameta.org/) for future compatibility and other nice things (e.g. free IDE support, like in IntelliJ).
+Boilerplate-free Tagless Final DSLs via macro annotations, written in [scala.meta](http://scalameta.org/) for future compatibility and other nice things (e.g. free IDE support, like in IntelliJ).
 
 This library provides 2 macros:
 
@@ -9,7 +9,7 @@ This library provides 2 macros:
 
 To use diesel in your project, [add it to your build](#sbt).
 
-For a running example of how the library looks in real usage, checkout [this Scastie snippet](https://scastie.scala-lang.org/lloydmeta/3WxZcpPXSwW7d8aSDVjHxA).
+For a runnable example of this library being used for Tagless Final, checkout [this Scastie snippet](https://scastie.scala-lang.org/lloydmeta/3WxZcpPXSwW7d8aSDVjHxA).
 
 ## `@diesel`
 
