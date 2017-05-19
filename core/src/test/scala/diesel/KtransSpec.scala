@@ -1,10 +1,9 @@
-package readme
+package diesel
 
-import diesel.ktrans
-import cats._
-import diesel.implicits._
+import cats.Id
+import org.scalatest.{FunSpec, Matchers}
 
-object KTransDemo {
+class KtransSpec extends FunSpec with Matchers {
 
   @ktrans
   trait Maths[G[_]] {
@@ -19,11 +18,14 @@ object KTransDemo {
     def times(l: Int, r: Int)    = l * r
   }
 
-  val idToOpt = λ[Id ~> Option](Some(_))
+  val idToOpt = λ[FunK[Id,Option]](Some(_))
 
   // use the auto-generated transformK method to create a Maths[Option] from Maths[Id]
   val MathsOptInterp = MathsIdInterp.transformK(idToOpt)
 
-  assert(MathsOptInterp.add(3, 10) == Some(13))
+  it("should transform properly") {
+
+    MathsOptInterp.add(3, 10) shouldBe Some(13)
+  }
 
 }

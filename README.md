@@ -6,8 +6,10 @@ This library provides 2 macros:
 
   1. [`@diesel`](#diesel) to make it easier to compose algebras together.
   2. [`@ktrans`](#ktrans) to make it easier to perform Kind transforms on interpreters.
-  
-To use diesel in your project, [add it to your build](#sbt). 
+
+To use diesel in your project, [add it to your build](#sbt).
+
+For a running example of how the library looks in real usage, checkout [this Scastie snippet](https://scastie.scala-lang.org/lloydmeta/3WxZcpPXSwW7d8aSDVjHxA).
 
 ## `@diesel`
 
@@ -16,7 +18,7 @@ The `@diesel` annotation cuts out the boilerplate associated with writing compos
 The Dsl can be accessed directly from the companion object if you import a converter located in `ops`
 (customisable by passing a name to the annotation as an argument). This are useful when you need to compose multiple DSLs in the context of `F[_]`, but do not want to name all the interpreter parameters.
 
-Note that this can be used along-side `@ktrans`.
+Note that this can be used along-side `@ktrans` (simply write the annotations next to each other).
 
 ### Example:
 
@@ -47,13 +49,13 @@ object DieselDemo {
       s <- Maths.add(x, y)
       _ <- Logger.info(s"Sum: $s")
       f <- Maths.add(p, s)
-      _ <- Logger.info(s"Final: $s")
+      _ <- Logger.info(s"Final: $f")
     } yield f
   }
 
   def main(args: Array[String]): Unit = {
 
-    // Wire in our interpreters
+    // Wire our interpreters in
     implicit val mathsInterp = new Maths[Id] {
       def times(l: Int, r: Int) = l * r
       def add(l: Int, r: Int)   = l + r
@@ -70,7 +72,7 @@ object DieselDemo {
 [info] Running DieselDemo
 Product: 12
 Sum: 7
-Final: 7
+Final: 19
 */
 ```
 
@@ -111,18 +113,18 @@ object Maths {
     implicit def toDsl[F[_]](o: Maths.type)(implicit m: Maths[F]): Maths[F] = m
   }
 }
-
 ```
 
 
 ## `@ktrans`
 
-The `@ktrans` annotation adds a `transformK` method to a trait that is parameterised by a Kind that takes 1 type parameter. 
+The `@ktrans` annotation adds a `transformK` method to a trait that is parameterised by a Kind that takes 1 type parameter.
 It's handy when you want to transform any given implementation of that trait on `F[_]` into one that implements it on `G[_]`.
 
-Useful because it saves you from having to write your boilerplate (method forwarding and results wrapping).
- 
-Note that this can be used along-side `@diesel`.
+Useful because it saves you from having to write boilerplate (method forwarding and results wrapping) that
+you would otherwise need to deal with manually (or via an IDE) when instantiating a new trait/abstract class.
+
+Note that this can be used along-side `@diesel` (simply write the annotations next to each other).
 
 ### Example
 
@@ -138,14 +140,14 @@ trait Maths[G[_]] {
 }
 
 val MathsIdInterp = new Maths[Id] {
-  def add(l: Int, r: Int) = l + r
+  def add(l: Int, r: Int)      = l + r
   def subtract(l: Int, r: Int) = l - r
-  def times(l: Int, r: Int) = l * r
+  def times(l: Int, r: Int)    = l * r
 }
 
 // Using kind-project syntax to build our natural transformation from
 // Id to Option
-val idToOpt =  λ[FunK[Id, Option]](Some(_))
+val idToOpt = λ[FunK[Id, Option]](Some(_))
 
 // use the auto-generated transformK method to create a Maths[Option] from Maths[Id]
 // via idToOpt
@@ -154,7 +156,7 @@ val MathsOptInterp = MathsIdInterp.transformK(idToOpt)
 assert(MathsOptInterp.add(3, 10) == Some(13))
 ```
 
-There are conversions from Cat's natural transformation (`FunctionK`) or Scalaz's `NaturalTransformation` in the
+There are conversions from Cat's natural transformation (`FunctionK`) or Scalaz's `NaturalTransformation` to `FunK` in the
 `diesel-cats` and `diesel-scalaz` companion projects.
 
 ### How it works
@@ -180,9 +182,9 @@ trait Maths[G[_]] {
   final def transformK[H[_]](natTrans: FunK[G, H]): Maths[H] = {
     val curr = this
     new Maths[H] {
-      def add(l: Int, r: Int): H[Int] = natTrans(curr.add(l, r))
+      def add(l: Int, r: Int): H[Int]      = natTrans(curr.add(l, r))
       def subtract(l: Int, r: Int): H[Int] = natTrans(curr.subtract(l, r))
-      def times(l: Int, r: Int): H[Int] = natTrans(curr.times(l, r))
+      def times(l: Int, r: Int): H[Int]    = natTrans(curr.times(l, r))
     }
   }
 }
@@ -203,7 +205,7 @@ trait Maths[G[_]] {
 Diesel is published for Scala 2.11, 2.12 and ScalaJS.
 
 ```scala
-libraryDependencies += "com.beachape" %% "diesel-core" % s"$latest_version" % Compile
+libraryDependencies += "com.beachape" %% "diesel-core" % s"$latest_version"
 
 // Additional ceremony for using Scalameta macro annotations
 

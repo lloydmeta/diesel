@@ -26,13 +26,13 @@ object DieselDemo {
       s <- Maths.add(x, y)
       _ <- Logger.info(s"Sum: $s")
       f <- Maths.add(p, s)
-      _ <- Logger.info(s"Final: $s")
+      _ <- Logger.info(s"Final: $f")
     } yield f
   }
 
   def main(args: Array[String]): Unit = {
 
-    // Wire in our interpreters
+    // Wire our interpreters in
     implicit val mathsInterp = new Maths[Id] {
       def times(l: Int, r: Int) = l * r
       def add(l: Int, r: Int)   = l + r
