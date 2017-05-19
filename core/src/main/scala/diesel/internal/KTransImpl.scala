@@ -54,16 +54,14 @@ object KTransImpl {
     }
   }
 
+  private val transKTypeSuffix   = "TransK"
   private val currentTraitHandle = Term.Name("curr")
   private val currentTraitPat    = Pat.Var.Term(currentTraitHandle)
   private val natTransArg        = Term.Name("natTrans")
 
-  private val tparamChars: Seq[Char] = ('G' to 'Z') ++ ('A' to 'F')
-
   private def pickOther(tpname: Type.Param.Name): Type.Name = {
-    val k     = tpname.value
-    val other = tparamChars.collectFirst { case c if k != s"$c" => s"$c" }.getOrElse("Z")
-    Type.Name(other)
+    val k = tpname.value
+    Type.Name(s"$k$transKTypeSuffix")
   }
 
   private def selectOneFunctor(tparams: Seq[Type.Param]): Type.Param = tparams match {
@@ -89,16 +87,17 @@ object KTransImpl {
             Defn.Val(mods, Seq(pat), Some(newdeclTpe), access)
           }
         }
-        case Decl.Def(mods, name, tparams, paramss, Type.Apply(_, declTpeParams)) => {
-          val tparamTypes = tparams.map(tp => Type.Name(tp.name.value))
-          val paramNames  = paramss.map(_.map(tp => Term.Name(tp.name.value)))
-          val newdeclTpe  = Type.Apply(targetKType, declTpeParams)
+        case origDef: Decl.Def => {
+          val defWithTransKedTParams = bumpTypeParamsToTransKed(origDef)
+          val (mods, name, tparams, paramss, newDeclType) = (defWithTransKedTParams.mods, defWithTransKedTParams.name, defWithTransKedTParams.tparams, defWithTransKedTParams.paramss, defWithTransKedTParams.decltpe)
+          val tparamTypes            = tparams.map(tp => Type.Name(tp.name.value))
+          val paramNames             = paramss.map(_.map(tp => Term.Name(tp.name.value)))
           val body =
             if (tparamTypes.nonEmpty)
               q"""$natTransArg.apply($currentTraitHandle.$name[..$tparamTypes](...$paramNames))"""
             else
               q"""$natTransArg($currentTraitHandle.$name(...$paramNames))"""
-          Seq(Defn.Def(mods, name, tparams, paramss, Some(newdeclTpe), body))
+          Seq(Defn.Def(mods, name, tparams, paramss, Some(newDeclType), body))
         }
       }
 
@@ -117,9 +116,9 @@ object KTransImpl {
       // The spaces in multiline strings are significant
       val statsWithErrors = findErrors(
         Seq(
-          (
-            s"""Abstract methods with parameters that have types parameterised by the same kind as the annottee
-               |     ($tparamName[_]) are not supported""".stripMargin, paramsParameterisedByKind),
+          (s"""Abstract methods with parameters that have types parameterised by the same kind as the annottee
+               |     ($tparamName[_]) are not supported""".stripMargin,
+           paramsParameterisedByKind),
           ("Please use only package private modifiers.", privateMembersPf(concreteMembersSet)),
           ("Return types must be explicitly stated.", noReturnTypePf(concreteMembersSet)),
           ("Abstract type members are not supported", abstractType),
@@ -264,8 +263,7 @@ object KTransImpl {
     private def paramssParameterisedByKind(paramss: Seq[Seq[Term.Param]]) = {
       val flattened = paramss.flatten
       flattened.collectFirst {
-        case p @ Term.Param(_, _, Some(Type.Apply(Type.Name(s), _)), _)
-          if s == tparamName => p
+        case p @ Term.Param(_, _, Some(Type.Apply(Type.Name(s), _)), _) if s == tparamName => p
       }.nonEmpty
     }
 
@@ -293,6 +291,99 @@ object KTransImpl {
       case v @ Defn.Val(_, Seq(first, _ @_ *), _, _)
           if !(exempt.contains(v) || first.isInstanceOf[Pat.Var.Term]) =>
         v
+    }
+
+    private def typeParams(meth: Decl.Def): Set[String] = {
+      meth.tparams.map { tp =>
+        tp.name.value
+      }.toSet
+    }
+
+    private def bumpTypeParamsToTransKed(meth: Decl.Def): Decl.Def = {
+      val tParamNames = typeParams(meth)
+      val newtParams = meth.tparams.map { tparam =>
+        bumpTParam(tparam, tParamNames)
+      }
+      val newDeclTpe = {
+        // We depend on ensureSoundness having run by the point this is run; otherwise this could fail
+        val Type.Apply(_ , declTpeParams) = meth.decltpe
+        Type.Apply(targetKType, declTpeParams.map(t => bumpType(t, tParamNames)))
+      }
+      val newParamss = meth.paramss.map { params =>
+        params.map { param =>
+          val bumpedTArg = param.decltpe.map {
+            case Type.Arg.Repeated(tpe) => Type.Arg.Repeated(bumpType(tpe, tParamNames))
+            case Type.Arg.ByName(tpe)   => Type.Arg.ByName(bumpType(tpe, tParamNames))
+            case t: Type => bumpType(t, tParamNames)
+          }
+          param.copy(decltpe = bumpedTArg)
+        }
+      }
+      meth.copy(tparams = newtParams, paramss = newParamss, decltpe = newDeclTpe)
+    }
+
+    private def bumpTParam(tparam: Type.Param, baseTypeParams: Set[String]): Type.Param = {
+      val bumpedTparamName: Type.Param.Name =
+        if (baseTypeParams.contains(tparam.name.value))
+          Type.Name(s"${tparam.name.value}$transKTypeSuffix")
+        else
+          tparam.name
+      val bumpedTParamTParams = tparam.tparams.map(tp => bumpTParam(tp, baseTypeParams))
+
+      val bumpedCBounds = tparam.cbounds.map(cb => bumpType(cb, baseTypeParams))
+      val bumpedVBounds = tparam.vbounds.map(vb => bumpType(vb, baseTypeParams))
+      val bumpedTBounds = {
+        val Type.Bounds(lo, hi) = tparam.tbounds
+        Type.Bounds(lo.map(l => bumpType(l, baseTypeParams)),
+                    hi.map(h => bumpType(h, baseTypeParams)))
+      }
+      tparam.copy(name = bumpedTparamName,
+                  tparams = bumpedTParamTParams,
+                  tbounds = bumpedTBounds,
+                  vbounds = bumpedVBounds,
+                  cbounds = bumpedCBounds)
+    }
+
+    private def bumpType(tpe: Type, typesToBump: Set[String]): Type = tpe match {
+      case Type.Name(v) if typesToBump.contains(v) => Type.Name(s"$v$transKTypeSuffix")
+      case tSelect @ Type.Select(_, Term.Name(v)) if typesToBump.contains(v) =>
+        tSelect.copy(name = Type.Name(s"$v$transKTypeSuffix"))
+      case tApply @ Type.Apply(tpeInner, args) =>
+        tApply.copy(bumpType(tpeInner, typesToBump), args.map(a => bumpType(a, typesToBump)))
+      case tApplyInfix @ Type.ApplyInfix(lhs, Type.Name(op), rhs) => {
+        val opBumped =
+          if (typesToBump.contains(op))
+            Type.Name(s"$op$transKTypeSuffix")
+          else
+            Type.Name(op)
+        tApplyInfix.copy(lhs = bumpType(lhs, typesToBump),
+                         op = opBumped,
+                         rhs = bumpType(rhs, typesToBump))
+      }
+      case tWith @ Type.With(lhs, rhs) =>
+        tWith.copy(bumpType(lhs, typesToBump), bumpType(rhs, typesToBump))
+      case Type.Placeholder(Type.Bounds(lo, hi)) =>
+        Type.Placeholder(
+          Type.Bounds(lo.map(l => bumpType(l, typesToBump)),
+                      hi.map(h => bumpType(h, typesToBump))))
+      case Type.And(lhs, rhs)                 => Type.And(bumpType(lhs, typesToBump), bumpType(rhs, typesToBump))
+      case Type.Or(lhs, rhs)                  => Type.Or(bumpType(lhs, typesToBump), bumpType(rhs, typesToBump))
+      case typeAnnotate @ Type.Annotate(t, _) => typeAnnotate.copy(tpe = bumpType(t, typesToBump))
+      case typeExist @ Type.Existential(t, _) => typeExist.copy(tpe = bumpType(t, typesToBump))
+      case typeFunc @ Type.Function(params, res) => {
+        val bumpedParams = params.map {
+          case Type.Arg.ByName(t)   => Type.Arg.ByName(bumpType(t, typesToBump))
+          case Type.Arg.Repeated(t) => Type.Arg.Repeated(bumpType(t, typesToBump))
+          case t: Type => bumpType(t, typesToBump)
+        }
+        val bumpedRes = bumpType(res, typesToBump)
+        typeFunc.copy(params = bumpedParams, res = bumpedRes)
+      }
+      case typeRefine @ Type.Refine(maybeTpe, _) =>
+        typeRefine.copy(tpe = maybeTpe.map(t => bumpType(t, typesToBump)))
+      case Type.Tuple(tpes) => Type.Tuple(tpes.map(t => bumpType(t, typesToBump)))
+      case other            => other // Singleton and Project, I believe ...
+
     }
 
   }
