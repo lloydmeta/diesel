@@ -168,7 +168,7 @@ trait Maths[G[_]] {
 }
 ```
 
-is expanded into
+is roughly expanded into
 
 ```scala
 trait Maths[G[_]] {

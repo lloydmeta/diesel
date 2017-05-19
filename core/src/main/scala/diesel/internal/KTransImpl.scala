@@ -59,7 +59,7 @@ object KTransImpl {
   private val currentTraitPat    = Pat.Var.Term(currentTraitHandle)
   private val natTransArg        = Term.Name("natTrans")
 
-  private def pickOther(tpname: Type.Param.Name): Type.Name = {
+  private def transKSuffixed(tpname: Type.Name): Type.Name = {
     val k = tpname.value
     Type.Name(s"$k$transKTypeSuffix")
   }
@@ -88,6 +88,11 @@ object KTransImpl {
           }
         }
         case origDef: Decl.Def => {
+          /*
+             First, "bump" type parameters by adding a TransK-related suffix.
+             Bumping all of them across the board helps us avoid having to deal with
+             possible collisions with our new, transformed Kind
+           */
           val defWithTransKedTParams = bumpTypeParamsToTransKed(origDef)
           val (mods, name, tparams, paramss, newDeclType) = (defWithTransKedTParams.mods,
                                                              defWithTransKedTParams.name,
@@ -190,11 +195,11 @@ object KTransImpl {
       else
         Term.Name(selfRef.name.value)
 
-    private val targetKType      = pickOther(tparam.name)
+    private val tparamName       = tparam.name.value
+    private val tparamAsType     = Type.fresh().copy(tparamName)
+    private val targetKType      = transKSuffixed(Type.Name(tparamName))
     private val transformTargetK = tparam.copy(name = targetKType)
 
-    private val tparamName         = tparam.name.value
-    private val tparamAsType       = Type.fresh().copy(tparamName)
     private val templateStatements = template.stats.toSeq.flatten
 
     private val algebraTargetKConstructor = ctorRefBuilder(targetKType)
@@ -312,21 +317,20 @@ object KTransImpl {
     }
 
     private def bumpTypeParamsToTransKed(meth: Decl.Def): Decl.Def = {
-      val tParamNames = typeParams(meth)
+      // Add on the Kind param of the original algebra because we want it to be properly suffixed
+      // when referenced to in the methods of our new algebra implementation.
+      val tParamsThatNeedReplacement = typeParams(meth) + tparamName
       val newtParams = meth.tparams.map { tparam =>
-        bumpTParam(tparam, tParamNames)
+        bumpTParam(tparam, tParamsThatNeedReplacement)
       }
-      val newDeclTpe = {
-        // We depend on ensureSoundness having run by the point this is run; otherwise this could fail
-        val Type.Apply(_, declTpeParams) = meth.decltpe
-        Type.Apply(targetKType, declTpeParams.map(t => bumpType(t, tParamNames)))
-      }
+      val newDeclTpe = bumpType(meth.decltpe, tParamsThatNeedReplacement)
       val newParamss = meth.paramss.map { params =>
         params.map { param =>
           val bumpedTArg = param.decltpe.map {
-            case Type.Arg.Repeated(tpe) => Type.Arg.Repeated(bumpType(tpe, tParamNames))
-            case Type.Arg.ByName(tpe)   => Type.Arg.ByName(bumpType(tpe, tParamNames))
-            case t: Type                => bumpType(t, tParamNames)
+            case Type.Arg.Repeated(tpe) =>
+              Type.Arg.Repeated(bumpType(tpe, tParamsThatNeedReplacement))
+            case Type.Arg.ByName(tpe) => Type.Arg.ByName(bumpType(tpe, tParamsThatNeedReplacement))
+            case t: Type              => bumpType(t, tParamsThatNeedReplacement)
           }
           param.copy(decltpe = bumpedTArg)
         }
@@ -357,15 +361,15 @@ object KTransImpl {
     }
 
     private def bumpType(tpe: Type, typesToBump: Set[String]): Type = tpe match {
-      case Type.Name(v) if typesToBump.contains(v) => Type.Name(s"$v$transKTypeSuffix")
-      case tSelect @ Type.Select(_, Term.Name(v)) if typesToBump.contains(v) =>
-        tSelect.copy(name = Type.Name(s"$v$transKTypeSuffix"))
+      case tName @ Type.Name(v) if typesToBump.contains(v) => transKSuffixed(tName)
+      case tSelect @ Type.Select(_, tName @ Term.Name(v)) if typesToBump.contains(v) =>
+        tSelect.copy(name = transKSuffixed(tName))
       case tApply @ Type.Apply(tpeInner, args) =>
         tApply.copy(bumpType(tpeInner, typesToBump), args.map(a => bumpType(a, typesToBump)))
-      case tApplyInfix @ Type.ApplyInfix(lhs, Type.Name(op), rhs) => {
+      case tApplyInfix @ Type.ApplyInfix(lhs, opTName @ Type.Name(op), rhs) => {
         val opBumped =
           if (typesToBump.contains(op))
-            Type.Name(s"$op$transKTypeSuffix")
+            transKSuffixed(opTName)
           else
             Type.Name(op)
         tApplyInfix.copy(lhs = bumpType(lhs, typesToBump),
