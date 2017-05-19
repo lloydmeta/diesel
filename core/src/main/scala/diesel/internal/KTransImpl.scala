@@ -319,87 +319,84 @@ object KTransImpl {
     private def bumpTypeParamsToTransKed(meth: Decl.Def): Decl.Def = {
       // Add on the Kind param of the original algebra because we want it to be properly suffixed
       // when referenced to in the methods of our new algebra implementation.
-      val tParamsThatNeedReplacement = typeParams(meth) + tparamName
-      val newtParams = meth.tparams.map { tparam =>
-        bumpTParam(tparam, tParamsThatNeedReplacement)
+      val tParamsToBump = typeParams(meth) + tparamName
+
+      def bumpTParam(tparam: Type.Param): Type.Param = {
+        val bumpedTparamName: Type.Param.Name =
+          if (tParamsToBump.contains(tparam.name.value))
+            Type.Name(s"${tparam.name.value}$transKTypeSuffix")
+          else
+            tparam.name
+        val bumpedTParamTParams = tparam.tparams.map(tp => bumpTParam(tp))
+
+        val bumpedCBounds = tparam.cbounds.map(cb => bumpType(cb))
+        val bumpedVBounds = tparam.vbounds.map(vb => bumpType(vb))
+        val bumpedTBounds = {
+          val Type.Bounds(lo, hi) = tparam.tbounds
+          Type.Bounds(lo.map(l => bumpType(l)), hi.map(h => bumpType(h)))
+        }
+        tparam.copy(name = bumpedTparamName,
+                    tparams = bumpedTParamTParams,
+                    tbounds = bumpedTBounds,
+                    vbounds = bumpedVBounds,
+                    cbounds = bumpedCBounds)
       }
-      val newDeclTpe = bumpType(meth.decltpe, tParamsThatNeedReplacement)
+
+      def bumpType(tpe: Type): Type = tpe match {
+        case tName @ Type.Name(v) if tParamsToBump.contains(v) => transKSuffixed(tName)
+        case tSelect @ Type.Select(_, tName @ Term.Name(v)) if tParamsToBump.contains(v) =>
+          tSelect.copy(name = transKSuffixed(tName))
+        case tApply @ Type.Apply(tpeInner, args) =>
+          tApply.copy(bumpType(tpeInner), args.map(a => bumpType(a)))
+        case tApplyInfix @ Type.ApplyInfix(lhs, opTName @ Type.Name(op), rhs) => {
+          val opBumped =
+            if (tParamsToBump.contains(op))
+              transKSuffixed(opTName)
+            else
+              Type.Name(op)
+          tApplyInfix.copy(lhs = bumpType(lhs), op = opBumped, rhs = bumpType(rhs))
+        }
+        case tWith @ Type.With(lhs, rhs) =>
+          tWith.copy(bumpType(lhs), bumpType(rhs))
+        case Type.Placeholder(Type.Bounds(lo, hi)) =>
+          Type.Placeholder(Type.Bounds(lo.map(l => bumpType(l)), hi.map(h => bumpType(h))))
+        case Type.And(lhs, rhs) => Type.And(bumpType(lhs), bumpType(rhs))
+        case Type.Or(lhs, rhs)  => Type.Or(bumpType(lhs), bumpType(rhs))
+        case typeAnnotate @ Type.Annotate(t, _) =>
+          typeAnnotate.copy(tpe = bumpType(t))
+        case typeExist @ Type.Existential(t, _) => typeExist.copy(tpe = bumpType(t))
+        case typeFunc @ Type.Function(params, res) => {
+          val bumpedParams = params.map {
+            case Type.Arg.ByName(t)   => Type.Arg.ByName(bumpType(t))
+            case Type.Arg.Repeated(t) => Type.Arg.Repeated(bumpType(t))
+            case t: Type              => bumpType(t)
+          }
+          val bumpedRes = bumpType(res)
+          typeFunc.copy(params = bumpedParams, res = bumpedRes)
+        }
+        case typeRefine @ Type.Refine(maybeTpe, _) =>
+          typeRefine.copy(tpe = maybeTpe.map(t => bumpType(t)))
+        case Type.Tuple(tpes) => Type.Tuple(tpes.map(t => bumpType(t)))
+        case other            => other // Singleton and Project, I believe ...
+
+      }
+
+      val newtParams = meth.tparams.map { tparam =>
+        bumpTParam(tparam)
+      }
+      val newDeclTpe = bumpType(meth.decltpe)
       val newParamss = meth.paramss.map { params =>
         params.map { param =>
           val bumpedTArg = param.decltpe.map {
             case Type.Arg.Repeated(tpe) =>
-              Type.Arg.Repeated(bumpType(tpe, tParamsThatNeedReplacement))
-            case Type.Arg.ByName(tpe) => Type.Arg.ByName(bumpType(tpe, tParamsThatNeedReplacement))
-            case t: Type              => bumpType(t, tParamsThatNeedReplacement)
+              Type.Arg.Repeated(bumpType(tpe))
+            case Type.Arg.ByName(tpe) => Type.Arg.ByName(bumpType(tpe))
+            case t: Type              => bumpType(t)
           }
           param.copy(decltpe = bumpedTArg)
         }
       }
       meth.copy(tparams = newtParams, paramss = newParamss, decltpe = newDeclTpe)
-    }
-
-    private def bumpTParam(tparam: Type.Param, baseTypeParams: Set[String]): Type.Param = {
-      val bumpedTparamName: Type.Param.Name =
-        if (baseTypeParams.contains(tparam.name.value))
-          Type.Name(s"${tparam.name.value}$transKTypeSuffix")
-        else
-          tparam.name
-      val bumpedTParamTParams = tparam.tparams.map(tp => bumpTParam(tp, baseTypeParams))
-
-      val bumpedCBounds = tparam.cbounds.map(cb => bumpType(cb, baseTypeParams))
-      val bumpedVBounds = tparam.vbounds.map(vb => bumpType(vb, baseTypeParams))
-      val bumpedTBounds = {
-        val Type.Bounds(lo, hi) = tparam.tbounds
-        Type.Bounds(lo.map(l => bumpType(l, baseTypeParams)),
-                    hi.map(h => bumpType(h, baseTypeParams)))
-      }
-      tparam.copy(name = bumpedTparamName,
-                  tparams = bumpedTParamTParams,
-                  tbounds = bumpedTBounds,
-                  vbounds = bumpedVBounds,
-                  cbounds = bumpedCBounds)
-    }
-
-    private def bumpType(tpe: Type, typesToBump: Set[String]): Type = tpe match {
-      case tName @ Type.Name(v) if typesToBump.contains(v) => transKSuffixed(tName)
-      case tSelect @ Type.Select(_, tName @ Term.Name(v)) if typesToBump.contains(v) =>
-        tSelect.copy(name = transKSuffixed(tName))
-      case tApply @ Type.Apply(tpeInner, args) =>
-        tApply.copy(bumpType(tpeInner, typesToBump), args.map(a => bumpType(a, typesToBump)))
-      case tApplyInfix @ Type.ApplyInfix(lhs, opTName @ Type.Name(op), rhs) => {
-        val opBumped =
-          if (typesToBump.contains(op))
-            transKSuffixed(opTName)
-          else
-            Type.Name(op)
-        tApplyInfix.copy(lhs = bumpType(lhs, typesToBump),
-                         op = opBumped,
-                         rhs = bumpType(rhs, typesToBump))
-      }
-      case tWith @ Type.With(lhs, rhs) =>
-        tWith.copy(bumpType(lhs, typesToBump), bumpType(rhs, typesToBump))
-      case Type.Placeholder(Type.Bounds(lo, hi)) =>
-        Type.Placeholder(
-          Type.Bounds(lo.map(l => bumpType(l, typesToBump)),
-                      hi.map(h => bumpType(h, typesToBump))))
-      case Type.And(lhs, rhs)                 => Type.And(bumpType(lhs, typesToBump), bumpType(rhs, typesToBump))
-      case Type.Or(lhs, rhs)                  => Type.Or(bumpType(lhs, typesToBump), bumpType(rhs, typesToBump))
-      case typeAnnotate @ Type.Annotate(t, _) => typeAnnotate.copy(tpe = bumpType(t, typesToBump))
-      case typeExist @ Type.Existential(t, _) => typeExist.copy(tpe = bumpType(t, typesToBump))
-      case typeFunc @ Type.Function(params, res) => {
-        val bumpedParams = params.map {
-          case Type.Arg.ByName(t)   => Type.Arg.ByName(bumpType(t, typesToBump))
-          case Type.Arg.Repeated(t) => Type.Arg.Repeated(bumpType(t, typesToBump))
-          case t: Type              => bumpType(t, typesToBump)
-        }
-        val bumpedRes = bumpType(res, typesToBump)
-        typeFunc.copy(params = bumpedParams, res = bumpedRes)
-      }
-      case typeRefine @ Type.Refine(maybeTpe, _) =>
-        typeRefine.copy(tpe = maybeTpe.map(t => bumpType(t, typesToBump)))
-      case Type.Tuple(tpes) => Type.Tuple(tpes.map(t => bumpType(t, typesToBump)))
-      case other            => other // Singleton and Project, I believe ...
-
     }
 
   }
