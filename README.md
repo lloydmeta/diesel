@@ -50,7 +50,7 @@ object DieselDemo  {
 
   def main(args: Array[String]): Unit = {
 
-    // Wire in our interpreters
+    // Wire our interpreters in
     implicit val mathsInterp = new Maths[Id] {
       def times(l: Int, r: Int) = l * r
       def add(l: Int, r: Int)   = l + r
