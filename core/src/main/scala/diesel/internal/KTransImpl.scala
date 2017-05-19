@@ -89,9 +89,13 @@ object KTransImpl {
         }
         case origDef: Decl.Def => {
           val defWithTransKedTParams = bumpTypeParamsToTransKed(origDef)
-          val (mods, name, tparams, paramss, newDeclType) = (defWithTransKedTParams.mods, defWithTransKedTParams.name, defWithTransKedTParams.tparams, defWithTransKedTParams.paramss, defWithTransKedTParams.decltpe)
-          val tparamTypes            = tparams.map(tp => Type.Name(tp.name.value))
-          val paramNames             = paramss.map(_.map(tp => Term.Name(tp.name.value)))
+          val (mods, name, tparams, paramss, newDeclType) = (defWithTransKedTParams.mods,
+                                                             defWithTransKedTParams.name,
+                                                             defWithTransKedTParams.tparams,
+                                                             defWithTransKedTParams.paramss,
+                                                             defWithTransKedTParams.decltpe)
+          val tparamTypes = tparams.map(tp => Type.Name(tp.name.value))
+          val paramNames  = paramss.map(_.map(tp => Term.Name(tp.name.value)))
           val body =
             if (tparamTypes.nonEmpty)
               q"""$natTransArg.apply($currentTraitHandle.$name[..$tparamTypes](...$paramNames))"""
@@ -128,6 +132,8 @@ object KTransImpl {
           ("Vars are not allowed.", varsPf(Set.empty)),
           ("Vals that are not assignments are not allowed at the moment",
            patternMatchingVals(concreteMembersSet)),
+          (s"Type member shadows the algebra's kind $tparamName[_] (same name or otherwise points to it)",
+           typeMemberPointsToKind),
           (s"""This method has a type parameter that shadows the $tparamName[_] used to annotate the trait.
               |    Besides being confusing for readers of your code, this is not currently supported by diesel.""".stripMargin,
            methodsShadowingTParamPF)
@@ -271,6 +277,12 @@ object KTransImpl {
       case t: Decl.Type => t
     }
 
+    private def typeMemberPointsToKind: StatPF = {
+      case t @ Defn.Type(_, Type.Name(n), _, Type.Apply(Type.Name(v), _))
+          if v == tparamName || n == tparamName =>
+        t
+    }
+
     private def nonMatchingKindPf(exempt: Set[Stat]): StatPF = {
       case d: Decl.Def if !exempt.contains(d) => d
       case v: Decl.Val if !exempt.contains(v) => v
@@ -306,7 +318,7 @@ object KTransImpl {
       }
       val newDeclTpe = {
         // We depend on ensureSoundness having run by the point this is run; otherwise this could fail
-        val Type.Apply(_ , declTpeParams) = meth.decltpe
+        val Type.Apply(_, declTpeParams) = meth.decltpe
         Type.Apply(targetKType, declTpeParams.map(t => bumpType(t, tParamNames)))
       }
       val newParamss = meth.paramss.map { params =>
@@ -314,7 +326,7 @@ object KTransImpl {
           val bumpedTArg = param.decltpe.map {
             case Type.Arg.Repeated(tpe) => Type.Arg.Repeated(bumpType(tpe, tParamNames))
             case Type.Arg.ByName(tpe)   => Type.Arg.ByName(bumpType(tpe, tParamNames))
-            case t: Type => bumpType(t, tParamNames)
+            case t: Type                => bumpType(t, tParamNames)
           }
           param.copy(decltpe = bumpedTArg)
         }
@@ -374,7 +386,7 @@ object KTransImpl {
         val bumpedParams = params.map {
           case Type.Arg.ByName(t)   => Type.Arg.ByName(bumpType(t, typesToBump))
           case Type.Arg.Repeated(t) => Type.Arg.Repeated(bumpType(t, typesToBump))
-          case t: Type => bumpType(t, typesToBump)
+          case t: Type              => bumpType(t, typesToBump)
         }
         val bumpedRes = bumpType(res, typesToBump)
         typeFunc.copy(params = bumpedParams, res = bumpedRes)
