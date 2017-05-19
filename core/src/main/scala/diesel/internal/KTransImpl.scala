@@ -344,8 +344,6 @@ object KTransImpl {
 
       def bumpType(tpe: Type): Type = tpe match {
         case tName @ Type.Name(v) if tParamsToBump.contains(v) => transKSuffixed(tName)
-        case tSelect @ Type.Select(_, tName @ Term.Name(v)) if tParamsToBump.contains(v) =>
-          tSelect.copy(name = transKSuffixed(tName))
         case tApply @ Type.Apply(tpeInner, args) =>
           tApply.copy(bumpType(tpeInner), args.map(a => bumpType(a)))
         case tApplyInfix @ Type.ApplyInfix(lhs, opTName @ Type.Name(op), rhs) => {
@@ -366,19 +364,14 @@ object KTransImpl {
           typeAnnotate.copy(tpe = bumpType(t))
         case typeExist @ Type.Existential(t, _) => typeExist.copy(tpe = bumpType(t))
         case typeFunc @ Type.Function(params, res) => {
-          val bumpedParams = params.map {
-            case Type.Arg.ByName(t)   => Type.Arg.ByName(bumpType(t))
-            case Type.Arg.Repeated(t) => Type.Arg.Repeated(bumpType(t))
-            case t: Type              => bumpType(t)
-          }
+          val bumpedParams = params.map(transformTArgType(bumpType))
           val bumpedRes = bumpType(res)
           typeFunc.copy(params = bumpedParams, res = bumpedRes)
         }
         case typeRefine @ Type.Refine(maybeTpe, _) =>
           typeRefine.copy(tpe = maybeTpe.map(t => bumpType(t)))
         case Type.Tuple(tpes) => Type.Tuple(tpes.map(t => bumpType(t)))
-        case other            => other // Singleton and Project, I believe ...
-
+        case other            => other // Select, Singleton and Project, I believe ... which can't point to method type params ?
       }
 
       val newtParams = meth.tparams.map { tparam =>
@@ -387,18 +380,19 @@ object KTransImpl {
       val newDeclTpe = bumpType(meth.decltpe)
       val newParamss = meth.paramss.map { params =>
         params.map { param =>
-          val bumpedTArg = param.decltpe.map {
-            case Type.Arg.Repeated(tpe) =>
-              Type.Arg.Repeated(bumpType(tpe))
-            case Type.Arg.ByName(tpe) => Type.Arg.ByName(bumpType(tpe))
-            case t: Type              => bumpType(t)
-          }
+          val bumpedTArg = param.decltpe.map(transformTArgType(bumpType))
           param.copy(decltpe = bumpedTArg)
         }
       }
       meth.copy(tparams = newtParams, paramss = newParamss, decltpe = newDeclTpe)
     }
 
+  }
+
+  private def transformTArgType(f: Type => Type)(tArg: Type.Arg): Type.Arg = tArg match {
+    case Type.Arg.Repeated(tpe) => Type.Arg.Repeated(f(tpe))
+    case Type.Arg.ByName(tpe)   => Type.Arg.ByName(f(tpe))
+    case t: Type                => f(t)
   }
 
 }
