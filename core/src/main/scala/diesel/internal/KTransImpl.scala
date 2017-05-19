@@ -54,16 +54,14 @@ object KTransImpl {
     }
   }
 
+  private val transKTypeSuffix   = "TransK"
   private val currentTraitHandle = Term.Name("curr")
   private val currentTraitPat    = Pat.Var.Term(currentTraitHandle)
   private val natTransArg        = Term.Name("natTrans")
 
-  private val tparamChars: Seq[Char] = ('G' to 'Z') ++ ('A' to 'F')
-
-  private def pickOther(tpname: Type.Param.Name): Type.Name = {
-    val k     = tpname.value
-    val other = tparamChars.collectFirst { case c if k != s"$c" => s"$c" }.getOrElse("Z")
-    Type.Name(other)
+  private def transKSuffixed(tpname: Type.Name): Type.Name = {
+    val k = tpname.value
+    Type.Name(s"$k$transKTypeSuffix")
   }
 
   private def selectOneFunctor(tparams: Seq[Type.Param]): Type.Param = tparams match {
@@ -89,16 +87,26 @@ object KTransImpl {
             Defn.Val(mods, Seq(pat), Some(newdeclTpe), access)
           }
         }
-        case Decl.Def(mods, name, tparams, paramss, Type.Apply(_, declTpeParams)) => {
+        case origDef: Decl.Def => {
+          /*
+             First, "bump" type parameters by adding a TransK-related suffix.
+             Bumping all of them across the board helps us avoid having to deal with
+             possible collisions with our new, transformed Kind
+           */
+          val defWithTransKedTParams = bumpTypeParamsToTransKed(origDef)
+          val (mods, name, tparams, paramss, newDeclType) = (defWithTransKedTParams.mods,
+                                                             defWithTransKedTParams.name,
+                                                             defWithTransKedTParams.tparams,
+                                                             defWithTransKedTParams.paramss,
+                                                             defWithTransKedTParams.decltpe)
           val tparamTypes = tparams.map(tp => Type.Name(tp.name.value))
           val paramNames  = paramss.map(_.map(tp => Term.Name(tp.name.value)))
-          val newdeclTpe  = Type.Apply(targetKType, declTpeParams)
           val body =
             if (tparamTypes.nonEmpty)
               q"""$natTransArg.apply($currentTraitHandle.$name[..$tparamTypes](...$paramNames))"""
             else
               q"""$natTransArg($currentTraitHandle.$name(...$paramNames))"""
-          Seq(Defn.Def(mods, name, tparams, paramss, Some(newdeclTpe), body))
+          Seq(Defn.Def(mods, name, tparams, paramss, Some(newDeclType), body))
         }
       }
 
@@ -117,9 +125,9 @@ object KTransImpl {
       // The spaces in multiline strings are significant
       val statsWithErrors = findErrors(
         Seq(
-          (
-            s"""Abstract methods with parameters that have types parameterised by the same kind as the annottee
-               |     ($tparamName[_]) are not supported""".stripMargin, paramsParameterisedByKind),
+          (s"""Abstract methods with parameters that have types parameterised by the same kind as the annottee
+               |     ($tparamName[_]) are not supported""".stripMargin,
+           paramsParameterisedByKind),
           ("Please use only package private modifiers.", privateMembersPf(concreteMembersSet)),
           ("Return types must be explicitly stated.", noReturnTypePf(concreteMembersSet)),
           ("Abstract type members are not supported", abstractType),
@@ -129,6 +137,8 @@ object KTransImpl {
           ("Vars are not allowed.", varsPf(Set.empty)),
           ("Vals that are not assignments are not allowed at the moment",
            patternMatchingVals(concreteMembersSet)),
+          (s"Type member shadows the algebra's kind $tparamName[_] (same name or otherwise points to it)",
+           typeMemberPointsToKind),
           (s"""This method has a type parameter that shadows the $tparamName[_] used to annotate the trait.
               |    Besides being confusing for readers of your code, this is not currently supported by diesel.""".stripMargin,
            methodsShadowingTParamPF)
@@ -185,11 +195,11 @@ object KTransImpl {
       else
         Term.Name(selfRef.name.value)
 
-    private val targetKType      = pickOther(tparam.name)
+    private val tparamName       = tparam.name.value
+    private val tparamAsType     = Type.fresh().copy(tparamName)
+    private val targetKType      = transKSuffixed(Type.Name(tparamName))
     private val transformTargetK = tparam.copy(name = targetKType)
 
-    private val tparamName         = tparam.name.value
-    private val tparamAsType       = Type.fresh().copy(tparamName)
     private val templateStatements = template.stats.toSeq.flatten
 
     private val algebraTargetKConstructor = ctorRefBuilder(targetKType)
@@ -264,13 +274,18 @@ object KTransImpl {
     private def paramssParameterisedByKind(paramss: Seq[Seq[Term.Param]]) = {
       val flattened = paramss.flatten
       flattened.collectFirst {
-        case p @ Term.Param(_, _, Some(Type.Apply(Type.Name(s), _)), _)
-          if s == tparamName => p
+        case p @ Term.Param(_, _, Some(Type.Apply(Type.Name(s), _)), _) if s == tparamName => p
       }.nonEmpty
     }
 
     private def abstractType: StatPF = {
       case t: Decl.Type => t
+    }
+
+    private def typeMemberPointsToKind: StatPF = {
+      case t @ Defn.Type(_, Type.Name(n), _, Type.Apply(Type.Name(v), _))
+          if v == tparamName || n == tparamName =>
+        t
     }
 
     private def nonMatchingKindPf(exempt: Set[Stat]): StatPF = {
@@ -293,6 +308,95 @@ object KTransImpl {
       case v @ Defn.Val(_, Seq(first, _ @_ *), _, _)
           if !(exempt.contains(v) || first.isInstanceOf[Pat.Var.Term]) =>
         v
+    }
+
+    private def typeParams(meth: Decl.Def): Set[String] = {
+      meth.tparams.map { tp =>
+        tp.name.value
+      }.toSet
+    }
+
+    private def bumpTypeParamsToTransKed(meth: Decl.Def): Decl.Def = {
+      // Add on the Kind param of the original algebra because we want it to be properly suffixed
+      // when referenced to in the methods of our new algebra implementation.
+      val tParamsToBump = typeParams(meth) + tparamName
+
+      def bumpTParam(tparam: Type.Param): Type.Param = {
+        val bumpedTparamName: Type.Param.Name =
+          if (tParamsToBump.contains(tparam.name.value))
+            Type.Name(s"${tparam.name.value}$transKTypeSuffix")
+          else
+            tparam.name
+        val bumpedTParamTParams = tparam.tparams.map(tp => bumpTParam(tp))
+
+        val bumpedCBounds = tparam.cbounds.map(cb => bumpType(cb))
+        val bumpedVBounds = tparam.vbounds.map(vb => bumpType(vb))
+        val bumpedTBounds = {
+          val Type.Bounds(lo, hi) = tparam.tbounds
+          Type.Bounds(lo.map(l => bumpType(l)), hi.map(h => bumpType(h)))
+        }
+        tparam.copy(name = bumpedTparamName,
+                    tparams = bumpedTParamTParams,
+                    tbounds = bumpedTBounds,
+                    vbounds = bumpedVBounds,
+                    cbounds = bumpedCBounds)
+      }
+
+      def bumpType(tpe: Type): Type = tpe match {
+        case tName @ Type.Name(v) if tParamsToBump.contains(v) => transKSuffixed(tName)
+        case tSelect @ Type.Select(_, tName @ Term.Name(v)) if tParamsToBump.contains(v) =>
+          tSelect.copy(name = transKSuffixed(tName))
+        case tApply @ Type.Apply(tpeInner, args) =>
+          tApply.copy(bumpType(tpeInner), args.map(a => bumpType(a)))
+        case tApplyInfix @ Type.ApplyInfix(lhs, opTName @ Type.Name(op), rhs) => {
+          val opBumped =
+            if (tParamsToBump.contains(op))
+              transKSuffixed(opTName)
+            else
+              Type.Name(op)
+          tApplyInfix.copy(lhs = bumpType(lhs), op = opBumped, rhs = bumpType(rhs))
+        }
+        case tWith @ Type.With(lhs, rhs) =>
+          tWith.copy(bumpType(lhs), bumpType(rhs))
+        case Type.Placeholder(Type.Bounds(lo, hi)) =>
+          Type.Placeholder(Type.Bounds(lo.map(l => bumpType(l)), hi.map(h => bumpType(h))))
+        case Type.And(lhs, rhs) => Type.And(bumpType(lhs), bumpType(rhs))
+        case Type.Or(lhs, rhs)  => Type.Or(bumpType(lhs), bumpType(rhs))
+        case typeAnnotate @ Type.Annotate(t, _) =>
+          typeAnnotate.copy(tpe = bumpType(t))
+        case typeExist @ Type.Existential(t, _) => typeExist.copy(tpe = bumpType(t))
+        case typeFunc @ Type.Function(params, res) => {
+          val bumpedParams = params.map {
+            case Type.Arg.ByName(t)   => Type.Arg.ByName(bumpType(t))
+            case Type.Arg.Repeated(t) => Type.Arg.Repeated(bumpType(t))
+            case t: Type              => bumpType(t)
+          }
+          val bumpedRes = bumpType(res)
+          typeFunc.copy(params = bumpedParams, res = bumpedRes)
+        }
+        case typeRefine @ Type.Refine(maybeTpe, _) =>
+          typeRefine.copy(tpe = maybeTpe.map(t => bumpType(t)))
+        case Type.Tuple(tpes) => Type.Tuple(tpes.map(t => bumpType(t)))
+        case other            => other // Singleton and Project, I believe ...
+
+      }
+
+      val newtParams = meth.tparams.map { tparam =>
+        bumpTParam(tparam)
+      }
+      val newDeclTpe = bumpType(meth.decltpe)
+      val newParamss = meth.paramss.map { params =>
+        params.map { param =>
+          val bumpedTArg = param.decltpe.map {
+            case Type.Arg.Repeated(tpe) =>
+              Type.Arg.Repeated(bumpType(tpe))
+            case Type.Arg.ByName(tpe) => Type.Arg.ByName(bumpType(tpe))
+            case t: Type              => bumpType(t)
+          }
+          param.copy(decltpe = bumpedTArg)
+        }
+      }
+      meth.copy(tparams = newtParams, paramss = newParamss, decltpe = newDeclTpe)
     }
 
   }
