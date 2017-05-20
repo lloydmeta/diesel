@@ -129,15 +129,19 @@ object KTransImpl {
     }
 
     private def ensureSoundness(): Unit = {
-      val ctorErrors = if (paramssParameterisedByKind(algebraCtorParams))
-        Seq(
-          s"""Your algebra has constructor parameters with types referencing the algebra's Kind. Currently, this is not supported,
-             |    Please consider using a context bound instead (e.g. F[_]: Monad), which _is_ supported.
+      val ctorErrors = if (paramssParameterisedByKind(algebraCtorParams)) {
+        def render(ps: Seq[Term.Param]) = {
+          s"""(${ps.map(_.toString).mkString(", ")})"""
+        }
+        val paramssString = algebraCtorParams.map(render).mkString("")
+        Seq(s"""Your algebra has constructor parameters with types referencing the algebra's Kind. Currently, this is not supported,
+             |Please consider using a context bound instead (e.g. F[_]: Monad), which _is_ supported.
              |
-             |    $algebraCtorParams
+             |    ${algebraType.value}[${tparam.syntax}]$paramssString
            """.stripMargin)
-      else
+      } else {
         Nil
+      }
 
       val dslMembersSet      = (abstracts: List[Stat]).toSet
       val concreteMembersSet = (concretes: List[Stat]).toSet

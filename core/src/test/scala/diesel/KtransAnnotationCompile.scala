@@ -12,6 +12,7 @@ object KtransAnnotationCompileTests {
     def ser[A: Monoid](k: String, o: A): F[Unit]
     def des[A: Monoid](k: String): F[Option[A]]
     def funct[G[_]: Monad, A](k: String): F[Option[A]]
+    def funct2[G[_]: Monad, A](k: G[String], l: Option[G[A]]): F[Option[A]]
     def paramss[A](k: String)(i: Int): F[Int]
 
     protected[diesel] def packProt(p: Byte): F[Byte]
@@ -64,7 +65,7 @@ object KtransAnnotationCompileTests {
   }
 
   @ktrans
-  abstract class AbsClassWithCBoundAndParams[G[_]: Monad](age: Int)(name: String) { lulz =>
+  abstract class AbsClassWithCBoundAndParams[G[_]: Monad](age: Int)(name: String, wut: Option[Int]) { lulz =>
     type Hey = Int
     val eh: Int = 3
 
