@@ -135,7 +135,8 @@ object KTransImpl {
           s"""(${ps.map(_.toString).mkString(", ")})"""
         }
         val paramssString = algebraCtorParams.map(render).mkString("")
-        Seq(s"""Your algebra has constructor parameters with types referencing the algebra's Kind. Currently, this is not supported.
+        Seq(
+          s"""Your algebra has constructor parameters with types referencing the algebra's Kind. Currently, this is not supported.
              |Please consider using a context bound instead (e.g. F[_]: Monad), which *is* supported.
              |
              |    ${algebraType.value}[${tparam.syntax}]$paramssString
@@ -152,7 +153,8 @@ object KTransImpl {
           (s"""Abstract methods with parameters that have types parameterised by the same kind as the annottee
                |      ($tparamName[_]) are not supported.""".stripMargin,
            paramsParameterisedByKind),
-          ("Please use only package private modifiers for abstract members.", privateMembersPf(concreteMembersSet)),
+          ("Please use only package private modifiers for abstract members.",
+           privateMembersPf(concreteMembersSet)),
           ("Return types must be explicitly stated.", noReturnTypePf(concreteMembersSet)),
           ("Abstract type members are not supported.", abstractType),
           (s"""The return type of this method is not wrapped in $tparamName[_].""".stripMargin,
@@ -379,7 +381,8 @@ object KTransImpl {
         case tWith @ Type.With(lhs, rhs) =>
           tWith.copy(lhs = bumpType(lhs), rhs = bumpType(rhs))
         case Type.Placeholder(Type.Bounds(lo, hi)) =>
-          Type.Placeholder(Type.Bounds(lo = lo.map(l => bumpType(l)), hi = hi.map(h => bumpType(h))))
+          Type.Placeholder(
+            Type.Bounds(lo = lo.map(l => bumpType(l)), hi = hi.map(h => bumpType(h))))
         case Type.And(lhs, rhs) => Type.And(lhs = bumpType(lhs), rhs = bumpType(rhs))
         case Type.Or(lhs, rhs)  => Type.Or(lhs = bumpType(lhs), rhs = bumpType(rhs))
         case typeAnnotate @ Type.Annotate(t, _) =>
@@ -396,7 +399,7 @@ object KTransImpl {
         case Type.Project(q, tName @ Type.Name(v)) if tParamsToBump.contains(v) =>
           Type.Project(qual = bumpType(q), name = transKSuffixed(tName))
         case Type.Select(r, tName @ Type.Name(v)) if tParamsToBump.contains(v) =>
-          Type.Select(qual = r, name = transKSuffixed(tName))
+          Type.Select(r, transKSuffixed(tName))
         case other => other // Singleton, I believe ... which can't point to method type params ?
       }
 
