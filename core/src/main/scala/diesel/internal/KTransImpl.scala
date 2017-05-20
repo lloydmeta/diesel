@@ -79,6 +79,7 @@ object KTransImpl {
         s"This annotation only supports types parameterised with one kind that takes one type argument, but you provided $tparams")
   }
 
+  // Holds a bunch of state that we don't want to keep passing around
   private class TransformKMethBuilder(transKMethodName: Term.Name,
                                       algebraType: Type.Name,
                                       algebraCtorParams: Seq[Seq[Term.Param]],
@@ -134,8 +135,8 @@ object KTransImpl {
           s"""(${ps.map(_.toString).mkString(", ")})"""
         }
         val paramssString = algebraCtorParams.map(render).mkString("")
-        Seq(s"""Your algebra has constructor parameters with types referencing the algebra's Kind. Currently, this is not supported,
-             |Please consider using a context bound instead (e.g. F[_]: Monad), which _is_ supported.
+        Seq(s"""Your algebra has constructor parameters with types referencing the algebra's Kind. Currently, this is not supported.
+             |Please consider using a context bound instead (e.g. F[_]: Monad), which *is* supported.
              |
              |    ${algebraType.value}[${tparam.syntax}]$paramssString
            """.stripMargin)
@@ -149,21 +150,20 @@ object KTransImpl {
       val statsWithErrors = findErrors(
         Seq(
           (s"""Abstract methods with parameters that have types parameterised by the same kind as the annottee
-               |     ($tparamName[_]) are not supported""".stripMargin,
+               |      ($tparamName[_]) are not supported.""".stripMargin,
            paramsParameterisedByKind),
-          ("Please use only package private modifiers.", privateMembersPf(concreteMembersSet)),
+          ("Please use only package private modifiers for abstract members.", privateMembersPf(concreteMembersSet)),
           ("Return types must be explicitly stated.", noReturnTypePf(concreteMembersSet)),
-          ("Abstract type members are not supported", abstractType),
-          (s"""The return type of this method is not wrapped in $tparamName[_]. Methods like this can be
-              |    added to the trait's companion object.""".stripMargin,
+          ("Abstract type members are not supported.", abstractType),
+          (s"""The return type of this method is not wrapped in $tparamName[_].""".stripMargin,
            nonMatchingKindPf(dslMembersSet ++ concreteMembersSet)),
           ("Vars are not allowed.", varsPf(Set.empty)),
-          ("Vals that are not assignments are not allowed at the moment",
+          ("Vals that are not assignments are not allowed at the moment.",
            patternMatchingVals(concreteMembersSet)),
-          (s"Type member shadows the algebra's kind $tparamName[_] (same name or otherwise points to it)",
+          (s"Type member shadows the algebra's kind $tparamName[_] (same name or otherwise points to it).",
            typeMemberPointsToKind),
           (s"""This method has a type parameter that shadows the $tparamName[_] used to annotate the trait.
-              |    Besides being confusing for readers of your code, this is not currently supported by diesel.""".stripMargin,
+               |      Besides being confusing for readers of your code, this is not currently supported by diesel.""".stripMargin,
            methodsShadowingTParamPF)
         )
       )
@@ -177,7 +177,7 @@ object KTransImpl {
             .mkString("\n")
           s"""  ${stat.syntax}
              |
-           |$combinedErrors
+             |$combinedErrors
          """.stripMargin
       }
 
@@ -201,8 +201,7 @@ object KTransImpl {
       }
       val combinedErrMsgs = ctorErrors ++ specificErrors ++ genUnsupportedErrs
       if (combinedErrMsgs.nonEmpty) {
-        val errsMsg = combinedErrMsgs.mkString("\n\n")
-
+        val errsMsg = combinedErrMsgs.mkString("\n")
         abort(s"""
                  |
                  |Looks like you're using some unsupported syntax in a trait annotated with @ktrans.
