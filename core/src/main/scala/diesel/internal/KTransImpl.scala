@@ -273,9 +273,13 @@ object KTransImpl {
 
     private def paramssParameterisedByKind(paramss: Seq[Seq[Term.Param]]) = {
       val flattened = paramss.flatten
-      flattened.collectFirst {
-        case p @ Term.Param(_, _, Some(Type.Apply(Type.Name(s), _)), _) if s == tparamName => p
-      }.nonEmpty
+      flattened.exists { param =>
+        param.decltpe.map {
+          case Type.Arg.ByName(t) => typeRefsAlgKind(t)
+          case Type.Arg.Repeated(t) => typeRefsAlgKind(t)
+          case t: Type =>  typeRefsAlgKind(t)
+        }.exists(identity)
+      }
     }
 
     private def abstractType: StatPF = {
@@ -310,16 +314,10 @@ object KTransImpl {
         v
     }
 
-    private def typeParams(meth: Decl.Def): Set[String] = {
-      meth.tparams.map { tp =>
-        tp.name.value
-      }.toSet
-    }
-
     private def bumpTypeParamsToTransKed(meth: Decl.Def): Decl.Def = {
       // Add on the Kind param of the original algebra because we want it to be properly suffixed
       // when referenced to in the methods of our new algebra implementation.
-      val tParamsToBump = typeParams(meth) + tparamName
+      val tParamsToBump = meth.tparams.map(_.name.value).toSet + tparamName
 
       def bumpTParam(tparam: Type.Param): Type.Param = {
         val bumpedTparamName: Type.Param.Name =
@@ -365,13 +363,17 @@ object KTransImpl {
         case typeExist @ Type.Existential(t, _) => typeExist.copy(tpe = bumpType(t))
         case typeFunc @ Type.Function(params, res) => {
           val bumpedParams = params.map(transformTArgType(bumpType))
-          val bumpedRes = bumpType(res)
+          val bumpedRes    = bumpType(res)
           typeFunc.copy(params = bumpedParams, res = bumpedRes)
         }
         case typeRefine @ Type.Refine(maybeTpe, _) =>
           typeRefine.copy(tpe = maybeTpe.map(t => bumpType(t)))
         case Type.Tuple(tpes) => Type.Tuple(tpes.map(t => bumpType(t)))
-        case other            => other // Select, Singleton and Project, I believe ... which can't point to method type params ?
+        case Type.Project(q, tName @ Type.Name(v)) if tParamsToBump.contains(v) =>
+          Type.Project(bumpType(q), transKSuffixed(tName))
+        case Type.Select(r, tName @ Type.Name(v)) if tParamsToBump.contains(v) =>
+          Type.Select(r, transKSuffixed(tName))
+        case other => other // Singleton, I believe ... which can't point to method type params ?
       }
 
       val newtParams = meth.tparams.map { tparam =>
@@ -387,12 +389,44 @@ object KTransImpl {
       meth.copy(tparams = newtParams, paramss = newParamss, decltpe = newDeclTpe)
     }
 
-  }
+    // Type references algebra parameter Kind
+    def typeRefsAlgKind(tpe: Type): Boolean = tpe match {
+      case Type.Name(v) => v == tparamName
+      case Type.Apply(tpeInner, args) =>
+        typeRefsAlgKind(tpeInner) || args.exists(typeRefsAlgKind)
+      case Type.ApplyInfix(lhs, opTName, rhs) => {
+        typeRefsAlgKind(lhs) || typeRefsAlgKind(opTName) || typeRefsAlgKind(
+          rhs)
+      }
+      case Type.With(lhs, rhs) => typeRefsAlgKind(lhs) || typeRefsAlgKind(rhs)
+      case Type.Placeholder(Type.Bounds(lo, hi)) =>
+        Seq(lo.map(typeRefsAlgKind), hi.map(typeRefsAlgKind)).flatten
+          .exists(identity)
+      case Type.And(lhs, rhs)     => typeRefsAlgKind(lhs) || typeRefsAlgKind(rhs)
+      case Type.Or(lhs, rhs)      => typeRefsAlgKind(lhs) || typeRefsAlgKind(rhs)
+      case Type.Annotate(t, _)    => typeRefsAlgKind(t)
+      case Type.Existential(t, _) => typeRefsAlgKind(t)
+      case Type.Function(params, res) => {
+        val paramsRefsAlgKind = params.map {
+          case Type.Arg.Repeated(t) => typeRefsAlgKind(t)
+          case Type.Arg.ByName(t)   => typeRefsAlgKind(t)
+          case t: Type              => typeRefsAlgKind(t)
+        }
+        typeRefsAlgKind(res) || paramsRefsAlgKind.exists(identity)
+      }
+      case Type.Refine(maybeTpe, _) =>
+        maybeTpe.map(typeRefsAlgKind).exists(identity)
+      case Type.Tuple(tpes)              => tpes.map(typeRefsAlgKind).exists(identity)
+      case Type.Project(q, Type.Name(v)) => v == tparamName || typeRefsAlgKind(q)
+      case Type.Select(_, Type.Name(v))  => v == tparamName
+      case _                             => false // Singleton, I believe ... which can't point to method type params ?
+    }
 
-  private def transformTArgType(f: Type => Type)(tArg: Type.Arg): Type.Arg = tArg match {
-    case Type.Arg.Repeated(tpe) => Type.Arg.Repeated(f(tpe))
-    case Type.Arg.ByName(tpe)   => Type.Arg.ByName(f(tpe))
-    case t: Type                => f(t)
+    private def transformTArgType(f: Type => Type)(tArg: Type.Arg): Type.Arg = tArg match {
+      case Type.Arg.Repeated(tpe) => Type.Arg.Repeated(f(tpe))
+      case Type.Arg.ByName(tpe)   => Type.Arg.ByName(f(tpe))
+      case t: Type                => f(t)
+    }
   }
 
 }
