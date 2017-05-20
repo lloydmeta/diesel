@@ -16,26 +16,36 @@ object KTransImpl {
 
     defn match {
       case SupportedAnnottee(extracted) => {
-        val (algebraName, tparams, template) =
-          (extracted.tname, extracted.tparams, extracted.template)
-        val tparam = selectOneFunctor(tparams)
-        val builder = new TransformKMethBuilder(transKMethodName = transKMethodName,
-                                                algebraType = algebraName,
-                                                tparam = tparam,
-                                                template = template,
-                                                ctorRefBuilder = extracted.ctorCall)
+        val algebraName       = extracted.tname
+        val algebraCtorParams = extracted.ctorParams
+        val tparams           = extracted.tparams
+        val template          = extracted.template
+        val tparam            = selectOneFunctor(tparams)
+        val builder = new TransformKMethBuilder(
+          transKMethodName = transKMethodName,
+          algebraType = algebraName,
+          algebraCtorParams = algebraCtorParams,
+          tparam = tparam,
+          template = template,
+          ctorRefBuilder = extracted.ctorCall
+        )
         val meth = builder.build()
         extracted.appendStat(meth)
       }
       case Term.Block(Seq(SupportedAnnottee(extracted), companion)) => {
-        val (algebraName, tparams, template) =
-          (extracted.tname, extracted.tparams, extracted.template)
-        val tparam = selectOneFunctor(tparams)
-        val builder = new TransformKMethBuilder(transKMethodName = transKMethodName,
-                                                algebraType = algebraName,
-                                                tparam = tparam,
-                                                template = template,
-                                                ctorRefBuilder = extracted.ctorCall)
+        val algebraName       = extracted.tname
+        val algebraCtorParams = extracted.ctorParams
+        val tparams           = extracted.tparams
+        val template          = extracted.template
+        val tparam            = selectOneFunctor(tparams)
+        val builder = new TransformKMethBuilder(
+          transKMethodName = transKMethodName,
+          algebraType = algebraName,
+          algebraCtorParams = algebraCtorParams,
+          tparam = tparam,
+          template = template,
+          ctorRefBuilder = extracted.ctorCall
+        )
         val meth = builder.build()
         Term.Block(
           Seq(
@@ -71,12 +81,13 @@ object KTransImpl {
 
   private class TransformKMethBuilder(transKMethodName: Term.Name,
                                       algebraType: Type.Name,
+                                      algebraCtorParams: Seq[Seq[Term.Param]],
                                       tparam: Type.Param,
                                       template: Template,
                                       ctorRefBuilder: Type => Ctor.Call) {
 
     def build(): Defn.Def = {
-      ensureSoundMembers()
+      ensureSoundness()
       val forwardedAbstracts = abstracts.flatMap {
         case Decl.Val(mods, pats, Type.Apply(_, declTpeParams)) => {
           val newdeclTpe = Type.Apply(targetKType, declTpeParams)
@@ -117,7 +128,17 @@ object KTransImpl {
       }"""
     }
 
-    private def ensureSoundMembers(): Unit = {
+    private def ensureSoundness(): Unit = {
+      val ctorErrors = if (paramssParameterisedByKind(algebraCtorParams))
+        Seq(
+          s"""Your algebra has constructor parameters with types referencing the algebra's Kind. Currently, this is not supported,
+             |    Please consider using a context bound instead (e.g. F[_]: Monad), which _is_ supported.
+             |
+             |    $algebraCtorParams
+           """.stripMargin)
+      else
+        Nil
+
       val dslMembersSet      = (abstracts: List[Stat]).toSet
       val concreteMembersSet = (concretes: List[Stat]).toSet
       // The spaces in multiline strings are significant
@@ -174,7 +195,7 @@ object KTransImpl {
                |$statsStrs""".stripMargin)
         } else Nil
       }
-      val combinedErrMsgs = specificErrors ++ genUnsupportedErrs
+      val combinedErrMsgs = ctorErrors ++ specificErrors ++ genUnsupportedErrs
       if (combinedErrMsgs.nonEmpty) {
         val errsMsg = combinedErrMsgs.mkString("\n\n")
 

@@ -19,7 +19,7 @@ trait SupportedAnnottee {
 
   def ctorCall(tpe: Type): Ctor.Call
 
-  def ctorArgs: Seq[Seq[Term.Param]]
+  def ctorParams: Seq[Seq[Term.Param]]
 
 }
 
@@ -43,7 +43,7 @@ case class TraitAnnottee(mods: Seq[Mod],
     Term.ApplyType(Ctor.Ref.Name(tname.value), Seq(tpe))
   }
 
-  def ctorArgs: Seq[Seq[Term.Param]] = Nil
+  def ctorParams: Seq[Seq[Term.Param]] = Nil
 }
 
 case class ClassAnnottee(mods: Seq[Mod],
@@ -68,7 +68,7 @@ case class ClassAnnottee(mods: Seq[Mod],
     ctor"$ctorRef[$tpe](...$args)"
   }
 
-  def ctorArgs: Seq[Seq[Term.Param]] = ctor.paramss
+  def ctorParams: Seq[Seq[Term.Param]] = ctor.paramss
 }
 
 object SupportedAnnottee {
