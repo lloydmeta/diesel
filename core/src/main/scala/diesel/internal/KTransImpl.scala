@@ -367,7 +367,7 @@ object KTransImpl {
       def bumpType(tpe: Type): Type = tpe match {
         case tName @ Type.Name(v) if tParamsToBump.contains(v) => transKSuffixed(tName)
         case tApply @ Type.Apply(tpeInner, args) =>
-          tApply.copy(bumpType(tpeInner), args.map(a => bumpType(a)))
+          tApply.copy(tpe = bumpType(tpeInner), args = args.map(a => bumpType(a)))
         case tApplyInfix @ Type.ApplyInfix(lhs, opTName @ Type.Name(op), rhs) => {
           val opBumped =
             if (tParamsToBump.contains(op))
@@ -377,11 +377,11 @@ object KTransImpl {
           tApplyInfix.copy(lhs = bumpType(lhs), op = opBumped, rhs = bumpType(rhs))
         }
         case tWith @ Type.With(lhs, rhs) =>
-          tWith.copy(bumpType(lhs), bumpType(rhs))
+          tWith.copy(lhs = bumpType(lhs), rhs = bumpType(rhs))
         case Type.Placeholder(Type.Bounds(lo, hi)) =>
-          Type.Placeholder(Type.Bounds(lo.map(l => bumpType(l)), hi.map(h => bumpType(h))))
-        case Type.And(lhs, rhs) => Type.And(bumpType(lhs), bumpType(rhs))
-        case Type.Or(lhs, rhs)  => Type.Or(bumpType(lhs), bumpType(rhs))
+          Type.Placeholder(Type.Bounds(lo = lo.map(l => bumpType(l)), hi = hi.map(h => bumpType(h))))
+        case Type.And(lhs, rhs) => Type.And(lhs = bumpType(lhs), rhs = bumpType(rhs))
+        case Type.Or(lhs, rhs)  => Type.Or(lhs = bumpType(lhs), rhs = bumpType(rhs))
         case typeAnnotate @ Type.Annotate(t, _) =>
           typeAnnotate.copy(tpe = bumpType(t))
         case typeExist @ Type.Existential(t, _) => typeExist.copy(tpe = bumpType(t))
@@ -394,9 +394,9 @@ object KTransImpl {
           typeRefine.copy(tpe = maybeTpe.map(t => bumpType(t)))
         case Type.Tuple(tpes) => Type.Tuple(tpes.map(t => bumpType(t)))
         case Type.Project(q, tName @ Type.Name(v)) if tParamsToBump.contains(v) =>
-          Type.Project(bumpType(q), transKSuffixed(tName))
+          Type.Project(qual = bumpType(q), name = transKSuffixed(tName))
         case Type.Select(r, tName @ Type.Name(v)) if tParamsToBump.contains(v) =>
-          Type.Select(r, transKSuffixed(tName))
+          Type.Select(qual = r, name = transKSuffixed(tName))
         case other => other // Singleton, I believe ... which can't point to method type params ?
       }
 
