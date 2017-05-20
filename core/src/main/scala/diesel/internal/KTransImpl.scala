@@ -1,7 +1,5 @@
 package diesel.internal
 
-import diesel.Defaults
-
 import scala.collection.immutable._
 import scala.meta._
 
@@ -18,26 +16,36 @@ object KTransImpl {
 
     defn match {
       case SupportedAnnottee(extracted) => {
-        val (algebraName, tparams, template) =
-          (extracted.tname, extracted.tparams, extracted.template)
-        val tparam = selectOneFunctor(tparams)
-        val builder = new TransformKMethBuilder(transKMethodName = transKMethodName,
-                                                algebraType = algebraName,
-                                                tparam = tparam,
-                                                template = template,
-                                                ctorRefBuilder = extracted.ctorCall)
+        val algebraName       = extracted.tname
+        val algebraCtorParams = extracted.ctorParams
+        val tparams           = extracted.tparams
+        val template          = extracted.template
+        val tparam            = selectOneFunctor(tparams)
+        val builder = new TransformKMethBuilder(
+          transKMethodName = transKMethodName,
+          algebraType = algebraName,
+          algebraCtorParams = algebraCtorParams,
+          tparam = tparam,
+          template = template,
+          ctorRefBuilder = extracted.ctorCall
+        )
         val meth = builder.build()
         extracted.appendStat(meth)
       }
       case Term.Block(Seq(SupportedAnnottee(extracted), companion)) => {
-        val (algebraName, tparams, template) =
-          (extracted.tname, extracted.tparams, extracted.template)
-        val tparam = selectOneFunctor(tparams)
-        val builder = new TransformKMethBuilder(transKMethodName = transKMethodName,
-                                                algebraType = algebraName,
-                                                tparam = tparam,
-                                                template = template,
-                                                ctorRefBuilder = extracted.ctorCall)
+        val algebraName       = extracted.tname
+        val algebraCtorParams = extracted.ctorParams
+        val tparams           = extracted.tparams
+        val template          = extracted.template
+        val tparam            = selectOneFunctor(tparams)
+        val builder = new TransformKMethBuilder(
+          transKMethodName = transKMethodName,
+          algebraType = algebraName,
+          algebraCtorParams = algebraCtorParams,
+          tparam = tparam,
+          template = template,
+          ctorRefBuilder = extracted.ctorCall
+        )
         val meth = builder.build()
         Term.Block(
           Seq(
@@ -71,14 +79,16 @@ object KTransImpl {
         s"This annotation only supports types parameterised with one kind that takes one type argument, but you provided $tparams")
   }
 
+  // Holds a bunch of state that we don't want to keep passing around
   private class TransformKMethBuilder(transKMethodName: Term.Name,
                                       algebraType: Type.Name,
+                                      algebraCtorParams: Seq[Seq[Term.Param]],
                                       tparam: Type.Param,
                                       template: Template,
                                       ctorRefBuilder: Type => Ctor.Call) {
 
     def build(): Defn.Def = {
-      ensureSoundMembers()
+      ensureSoundness()
       val forwardedAbstracts = abstracts.flatMap {
         case Decl.Val(mods, pats, Type.Apply(_, declTpeParams)) => {
           val newdeclTpe = Type.Apply(targetKType, declTpeParams)
@@ -94,19 +104,19 @@ object KTransImpl {
              possible collisions with our new, transformed Kind
            */
           val defWithTransKedTParams = bumpTypeParamsToTransKed(origDef)
-          val (mods, name, tparams, paramss, newDeclType) = (defWithTransKedTParams.mods,
-                                                             defWithTransKedTParams.name,
-                                                             defWithTransKedTParams.tparams,
-                                                             defWithTransKedTParams.paramss,
-                                                             defWithTransKedTParams.decltpe)
-          val tparamTypes = tparams.map(tp => Type.Name(tp.name.value))
-          val paramNames  = paramss.map(_.map(tp => Term.Name(tp.name.value)))
+          val mods                   = defWithTransKedTParams.mods
+          val name                   = defWithTransKedTParams.name
+          val tparams                = defWithTransKedTParams.tparams
+          val paramss                = defWithTransKedTParams.paramss
+          val declTpe                = defWithTransKedTParams.decltpe
+          val tparamTypes            = tparams.map(tp => Type.Name(tp.name.value))
+          val paramNames             = paramss.map(_.map(tp => Term.Name(tp.name.value)))
           val body =
             if (tparamTypes.nonEmpty)
               q"""$natTransArg.apply($currentTraitHandle.$name[..$tparamTypes](...$paramNames))"""
             else
               q"""$natTransArg($currentTraitHandle.$name(...$paramNames))"""
-          Seq(Defn.Def(mods, name, tparams, paramss, Some(newDeclType), body))
+          Seq(Defn.Def(mods, name, tparams, paramss, Some(declTpe), body))
         }
       }
 
@@ -119,28 +129,43 @@ object KTransImpl {
       }"""
     }
 
-    private def ensureSoundMembers(): Unit = {
+    private def ensureSoundness(): Unit = {
+      val ctorErrors = if (paramssParameterisedByKind(algebraCtorParams)) {
+        def render(ps: Seq[Term.Param]) = {
+          s"""(${ps.map(_.toString).mkString(", ")})"""
+        }
+        val paramssString = algebraCtorParams.map(render).mkString("")
+        Seq(
+          s"""Your algebra has constructor parameters with types referencing the algebra's Kind. Currently, this is not supported.
+             |Please consider using a context bound instead (e.g. F[_]: Monad), which *is* supported.
+             |
+             |    ${algebraType.value}[${tparam.syntax}]$paramssString
+           """.stripMargin)
+      } else {
+        Nil
+      }
+
       val dslMembersSet      = (abstracts: List[Stat]).toSet
       val concreteMembersSet = (concretes: List[Stat]).toSet
       // The spaces in multiline strings are significant
       val statsWithErrors = findErrors(
         Seq(
           (s"""Abstract methods with parameters that have types parameterised by the same kind as the annottee
-               |     ($tparamName[_]) are not supported""".stripMargin,
+               |      ($tparamName[_]) are not supported.""".stripMargin,
            paramsParameterisedByKind),
-          ("Please use only package private modifiers.", privateMembersPf(concreteMembersSet)),
+          ("Please use only package private modifiers for abstract members.",
+           privateMembersPf(concreteMembersSet)),
           ("Return types must be explicitly stated.", noReturnTypePf(concreteMembersSet)),
-          ("Abstract type members are not supported", abstractType),
-          (s"""The return type of this method is not wrapped in $tparamName[_]. Methods like this can be
-              |    added to the trait's companion object.""".stripMargin,
+          ("Abstract type members are not supported.", abstractType),
+          (s"""The return type of this method is not wrapped in $tparamName[_].""".stripMargin,
            nonMatchingKindPf(dslMembersSet ++ concreteMembersSet)),
           ("Vars are not allowed.", varsPf(Set.empty)),
-          ("Vals that are not assignments are not allowed at the moment",
+          ("Vals that are not assignments are not allowed at the moment.",
            patternMatchingVals(concreteMembersSet)),
-          (s"Type member shadows the algebra's kind $tparamName[_] (same name or otherwise points to it)",
+          (s"Type member shadows the algebra's kind $tparamName[_] (same name or otherwise points to it).",
            typeMemberPointsToKind),
           (s"""This method has a type parameter that shadows the $tparamName[_] used to annotate the trait.
-              |    Besides being confusing for readers of your code, this is not currently supported by diesel.""".stripMargin,
+               |      Besides being confusing for readers of your code, this is not currently supported by diesel.""".stripMargin,
            methodsShadowingTParamPF)
         )
       )
@@ -154,7 +179,7 @@ object KTransImpl {
             .mkString("\n")
           s"""  ${stat.syntax}
              |
-           |$combinedErrors
+             |$combinedErrors
          """.stripMargin
       }
 
@@ -176,10 +201,9 @@ object KTransImpl {
                |$statsStrs""".stripMargin)
         } else Nil
       }
-      val combinedErrMsgs = specificErrors ++ genUnsupportedErrs
+      val combinedErrMsgs = ctorErrors ++ specificErrors ++ genUnsupportedErrs
       if (combinedErrMsgs.nonEmpty) {
-        val errsMsg = combinedErrMsgs.mkString("\n\n")
-
+        val errsMsg = combinedErrMsgs.mkString("\n")
         abort(s"""
                  |
                  |Looks like you're using some unsupported syntax in a trait annotated with @ktrans.
@@ -273,9 +297,15 @@ object KTransImpl {
 
     private def paramssParameterisedByKind(paramss: Seq[Seq[Term.Param]]) = {
       val flattened = paramss.flatten
-      flattened.collectFirst {
-        case p @ Term.Param(_, _, Some(Type.Apply(Type.Name(s), _)), _) if s == tparamName => p
-      }.nonEmpty
+      flattened.exists { param =>
+        param.decltpe
+          .map {
+            case Type.Arg.ByName(t)   => typeRefsAlgKind(t)
+            case Type.Arg.Repeated(t) => typeRefsAlgKind(t)
+            case t: Type              => typeRefsAlgKind(t)
+          }
+          .exists(identity)
+      }
     }
 
     private def abstractType: StatPF = {
@@ -310,16 +340,10 @@ object KTransImpl {
         v
     }
 
-    private def typeParams(meth: Decl.Def): Set[String] = {
-      meth.tparams.map { tp =>
-        tp.name.value
-      }.toSet
-    }
-
     private def bumpTypeParamsToTransKed(meth: Decl.Def): Decl.Def = {
       // Add on the Kind param of the original algebra because we want it to be properly suffixed
       // when referenced to in the methods of our new algebra implementation.
-      val tParamsToBump = typeParams(meth) + tparamName
+      val tParamsToBump = meth.tparams.map(_.name.value).toSet + tparamName
 
       def bumpTParam(tparam: Type.Param): Type.Param = {
         val bumpedTparamName: Type.Param.Name =
@@ -345,7 +369,7 @@ object KTransImpl {
       def bumpType(tpe: Type): Type = tpe match {
         case tName @ Type.Name(v) if tParamsToBump.contains(v) => transKSuffixed(tName)
         case tApply @ Type.Apply(tpeInner, args) =>
-          tApply.copy(bumpType(tpeInner), args.map(a => bumpType(a)))
+          tApply.copy(tpe = bumpType(tpeInner), args = args.map(a => bumpType(a)))
         case tApplyInfix @ Type.ApplyInfix(lhs, opTName @ Type.Name(op), rhs) => {
           val opBumped =
             if (tParamsToBump.contains(op))
@@ -355,23 +379,28 @@ object KTransImpl {
           tApplyInfix.copy(lhs = bumpType(lhs), op = opBumped, rhs = bumpType(rhs))
         }
         case tWith @ Type.With(lhs, rhs) =>
-          tWith.copy(bumpType(lhs), bumpType(rhs))
+          tWith.copy(lhs = bumpType(lhs), rhs = bumpType(rhs))
         case Type.Placeholder(Type.Bounds(lo, hi)) =>
-          Type.Placeholder(Type.Bounds(lo.map(l => bumpType(l)), hi.map(h => bumpType(h))))
-        case Type.And(lhs, rhs) => Type.And(bumpType(lhs), bumpType(rhs))
-        case Type.Or(lhs, rhs)  => Type.Or(bumpType(lhs), bumpType(rhs))
+          Type.Placeholder(
+            Type.Bounds(lo = lo.map(l => bumpType(l)), hi = hi.map(h => bumpType(h))))
+        case Type.And(lhs, rhs) => Type.And(lhs = bumpType(lhs), rhs = bumpType(rhs))
+        case Type.Or(lhs, rhs)  => Type.Or(lhs = bumpType(lhs), rhs = bumpType(rhs))
         case typeAnnotate @ Type.Annotate(t, _) =>
           typeAnnotate.copy(tpe = bumpType(t))
         case typeExist @ Type.Existential(t, _) => typeExist.copy(tpe = bumpType(t))
         case typeFunc @ Type.Function(params, res) => {
           val bumpedParams = params.map(transformTArgType(bumpType))
-          val bumpedRes = bumpType(res)
+          val bumpedRes    = bumpType(res)
           typeFunc.copy(params = bumpedParams, res = bumpedRes)
         }
         case typeRefine @ Type.Refine(maybeTpe, _) =>
           typeRefine.copy(tpe = maybeTpe.map(t => bumpType(t)))
         case Type.Tuple(tpes) => Type.Tuple(tpes.map(t => bumpType(t)))
-        case other            => other // Select, Singleton and Project, I believe ... which can't point to method type params ?
+        case Type.Project(q, tName @ Type.Name(v)) if tParamsToBump.contains(v) =>
+          Type.Project(qual = bumpType(q), name = transKSuffixed(tName))
+        case Type.Select(r, tName @ Type.Name(v)) if tParamsToBump.contains(v) =>
+          Type.Select(r, transKSuffixed(tName))
+        case other => other // Singleton, I believe ... which can't point to method type params ?
       }
 
       val newtParams = meth.tparams.map { tparam =>
@@ -387,12 +416,43 @@ object KTransImpl {
       meth.copy(tparams = newtParams, paramss = newParamss, decltpe = newDeclTpe)
     }
 
-  }
+    // Type references algebra parameter Kind
+    def typeRefsAlgKind(tpe: Type): Boolean = tpe match {
+      case Type.Name(v) => v == tparamName
+      case Type.Apply(tpeInner, args) =>
+        typeRefsAlgKind(tpeInner) || args.exists(typeRefsAlgKind)
+      case Type.ApplyInfix(lhs, opTName, rhs) => {
+        typeRefsAlgKind(lhs) || typeRefsAlgKind(opTName) || typeRefsAlgKind(rhs)
+      }
+      case Type.With(lhs, rhs) => typeRefsAlgKind(lhs) || typeRefsAlgKind(rhs)
+      case Type.Placeholder(Type.Bounds(lo, hi)) =>
+        Seq(lo.map(typeRefsAlgKind), hi.map(typeRefsAlgKind)).flatten
+          .exists(identity)
+      case Type.And(lhs, rhs)     => typeRefsAlgKind(lhs) || typeRefsAlgKind(rhs)
+      case Type.Or(lhs, rhs)      => typeRefsAlgKind(lhs) || typeRefsAlgKind(rhs)
+      case Type.Annotate(t, _)    => typeRefsAlgKind(t)
+      case Type.Existential(t, _) => typeRefsAlgKind(t)
+      case Type.Function(params, res) => {
+        val paramsRefsAlgKind = params.map {
+          case Type.Arg.Repeated(t) => typeRefsAlgKind(t)
+          case Type.Arg.ByName(t)   => typeRefsAlgKind(t)
+          case t: Type              => typeRefsAlgKind(t)
+        }
+        typeRefsAlgKind(res) || paramsRefsAlgKind.exists(identity)
+      }
+      case Type.Refine(maybeTpe, _) =>
+        maybeTpe.map(typeRefsAlgKind).exists(identity)
+      case Type.Tuple(tpes)              => tpes.map(typeRefsAlgKind).exists(identity)
+      case Type.Project(q, Type.Name(v)) => v == tparamName || typeRefsAlgKind(q)
+      case Type.Select(_, Type.Name(v))  => v == tparamName
+      case _                             => false // Singleton, I believe ... which can't point to method type params ?
+    }
 
-  private def transformTArgType(f: Type => Type)(tArg: Type.Arg): Type.Arg = tArg match {
-    case Type.Arg.Repeated(tpe) => Type.Arg.Repeated(f(tpe))
-    case Type.Arg.ByName(tpe)   => Type.Arg.ByName(f(tpe))
-    case t: Type                => f(t)
+    private def transformTArgType(f: Type => Type)(tArg: Type.Arg): Type.Arg = tArg match {
+      case Type.Arg.Repeated(tpe) => Type.Arg.Repeated(f(tpe))
+      case Type.Arg.ByName(tpe)   => Type.Arg.ByName(f(tpe))
+      case t: Type                => f(t)
+    }
   }
 
 }
