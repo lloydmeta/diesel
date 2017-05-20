@@ -1,5 +1,7 @@
 package diesel
 
+import internal.Defaults
+
 import scala.annotation.compileTimeOnly
 
 /**

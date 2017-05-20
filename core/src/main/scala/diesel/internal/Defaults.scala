@@ -1,4 +1,4 @@
-package diesel
+package diesel.internal
 
 object Defaults {
   val OpsName: String = "ops"

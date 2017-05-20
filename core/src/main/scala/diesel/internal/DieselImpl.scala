@@ -2,7 +2,6 @@ package diesel.internal
 
 import scala.meta._
 import scala.collection.immutable._
-import _root_.diesel.Defaults
 
 object DieselImpl {
 

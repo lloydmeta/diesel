@@ -1,7 +1,5 @@
 package diesel.internal
 
-import diesel.Defaults
-
 import scala.collection.immutable._
 import scala.meta._
 
