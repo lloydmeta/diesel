@@ -92,19 +92,19 @@ object KTransImpl {
              possible collisions with our new, transformed Kind
            */
           val defWithTransKedTParams = bumpTypeParamsToTransKed(origDef)
-          val (mods, name, tparams, paramss, newDeclType) = (defWithTransKedTParams.mods,
-                                                             defWithTransKedTParams.name,
-                                                             defWithTransKedTParams.tparams,
-                                                             defWithTransKedTParams.paramss,
-                                                             defWithTransKedTParams.decltpe)
-          val tparamTypes = tparams.map(tp => Type.Name(tp.name.value))
-          val paramNames  = paramss.map(_.map(tp => Term.Name(tp.name.value)))
+          val mods                   = defWithTransKedTParams.mods
+          val name                   = defWithTransKedTParams.name
+          val tparams                = defWithTransKedTParams.tparams
+          val paramss                = defWithTransKedTParams.paramss
+          val declTpe                = defWithTransKedTParams.decltpe
+          val tparamTypes            = tparams.map(tp => Type.Name(tp.name.value))
+          val paramNames             = paramss.map(_.map(tp => Term.Name(tp.name.value)))
           val body =
             if (tparamTypes.nonEmpty)
               q"""$natTransArg.apply($currentTraitHandle.$name[..$tparamTypes](...$paramNames))"""
             else
               q"""$natTransArg($currentTraitHandle.$name(...$paramNames))"""
-          Seq(Defn.Def(mods, name, tparams, paramss, Some(newDeclType), body))
+          Seq(Defn.Def(mods, name, tparams, paramss, Some(declTpe), body))
         }
       }
 
@@ -272,11 +272,13 @@ object KTransImpl {
     private def paramssParameterisedByKind(paramss: Seq[Seq[Term.Param]]) = {
       val flattened = paramss.flatten
       flattened.exists { param =>
-        param.decltpe.map {
-          case Type.Arg.ByName(t) => typeRefsAlgKind(t)
-          case Type.Arg.Repeated(t) => typeRefsAlgKind(t)
-          case t: Type =>  typeRefsAlgKind(t)
-        }.exists(identity)
+        param.decltpe
+          .map {
+            case Type.Arg.ByName(t)   => typeRefsAlgKind(t)
+            case Type.Arg.Repeated(t) => typeRefsAlgKind(t)
+            case t: Type              => typeRefsAlgKind(t)
+          }
+          .exists(identity)
       }
     }
 
@@ -393,8 +395,7 @@ object KTransImpl {
       case Type.Apply(tpeInner, args) =>
         typeRefsAlgKind(tpeInner) || args.exists(typeRefsAlgKind)
       case Type.ApplyInfix(lhs, opTName, rhs) => {
-        typeRefsAlgKind(lhs) || typeRefsAlgKind(opTName) || typeRefsAlgKind(
-          rhs)
+        typeRefsAlgKind(lhs) || typeRefsAlgKind(opTName) || typeRefsAlgKind(rhs)
       }
       case Type.With(lhs, rhs) => typeRefsAlgKind(lhs) || typeRefsAlgKind(rhs)
       case Type.Placeholder(Type.Bounds(lo, hi)) =>
