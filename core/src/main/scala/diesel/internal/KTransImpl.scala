@@ -89,7 +89,7 @@ object KTransImpl {
 
     def build(): Defn.Def = {
       ensureSoundness()
-      val forwardedAbstracts = forwardableAbstrats.flatMap {
+      val forwardedAbstracts = forwardableAbstracts.flatMap {
         case origDef: Decl.Val => toForwardedDefnVals(origDef)
         case origDef: Decl.Def => Seq(toForwardedDefnDef(origDef))
         case _                 => abort("Oh noes! You found a bug in the macro! Please file an issue :)")
@@ -120,7 +120,7 @@ object KTransImpl {
         Nil
       }
 
-      val dslMembersSet      = (forwardableAbstrats: List[Stat]).toSet
+      val dslMembersSet      = (forwardableAbstracts: List[Stat]).toSet
       val concreteMembersSet = (concretes: List[Stat]).toSet
       // The spaces in multiline strings are significant
       val statsWithErrors = findErrors(
@@ -208,7 +208,7 @@ object KTransImpl {
         case v: Defn => v
       }.toList
 
-    private val forwardableAbstrats: List[Decl] =
+    private val forwardableAbstracts: List[Decl] =
       templateStatements.collect {
         case d: Decl.Def if algKindWrapped(d.decltpe) || !typeRefsAlgKind(d.decltpe) => d
         case v: Decl.Val if algKindWrapped(v.decltpe) || !typeRefsAlgKind(v.decltpe) => v
@@ -344,7 +344,7 @@ object KTransImpl {
 
       // Do not use KTrans wrapped return type if the original type was not wrapped in the
       // algebra kind.
-      val declTpe = defWithTransKedTParams.decltpe
+      val declTpe     = defWithTransKedTParams.decltpe
       val tparamTypes = tparams.map(tp => Type.Name(tp.name.value))
       val paramNames  = paramss.map(_.map(tp => Term.Name(tp.name.value)))
       val forwardingCall =
@@ -392,7 +392,8 @@ object KTransImpl {
         bumpTParam(tparam)
       }
       // If the algebra kind wraps the return type, then suffix the kind too (G[_] -> GTransK[_])
-      val newDeclTpe = if (algKindWrapped(meth.decltpe))
+      val newDeclTpe =
+        if (algKindWrapped(meth.decltpe))
           suffixTypeNames(tParamsToBump + tparamName)(meth.decltpe)
         else
           suffixTypeNames(tParamsToBump)(meth.decltpe)
