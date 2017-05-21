@@ -5,7 +5,7 @@ import scala.language.higherKinds
 
 object Conversions {
 
-  def natTransToFunK[F[_], G[_]](functionK: F ~> G) =
+  def natTransToFunK[F[_], G[_]](functionK: F ~> G): FunK[F, G] =
     new FunK[F, G] {
       def apply[A](fa: F[A]): G[A] = functionK(fa)
     }

@@ -6,8 +6,7 @@ import scalaz._
 
 package object implicits {
 
-  implicit def natTransformToFunK[F[_], G[_]](
-      f: F ~> G): FunK[F, G] =
+  implicit def natTransformToFunK[F[_], G[_]](f: F ~> G): FunK[F, G] =
     Conversions.natTransToFunK(f)
 
 }

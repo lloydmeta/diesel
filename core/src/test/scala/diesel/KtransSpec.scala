@@ -18,7 +18,7 @@ class KtransSpec extends FunSpec with Matchers {
     def times(l: Int, r: Int)    = l * r
   }
 
-  val idToOpt = λ[FunK[Id,Option]](Some(_))
+  val idToOpt = λ[FunK[Id, Option]](Some(_))
 
   // use the auto-generated transformK method to create a Maths[Option] from Maths[Id]
   val MathsOptInterp = MathsIdInterp.transformK(idToOpt)

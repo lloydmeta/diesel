@@ -24,7 +24,8 @@ object FibApp extends App {
           r <- fromCache match {
             case None =>
               for {
-                _ <- Logger.warn(s"Not found in cache, trying to find fib of ${i - 1} and ${i - 2}")
+                _ <- Logger.warn(
+                  s"Not found in cache, trying to find fib of ${i - 1} and ${i - 2}")
                 a <- cachedFib[F](i - 1) /* Recursion! */
                 b <- cachedFib[F](i - 2)
                 s <- Maths.add(Maths.int(a), Maths.int(b))

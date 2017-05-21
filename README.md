@@ -1,7 +1,7 @@
 # Diesel [![Build Status](https://travis-ci.org/lloydmeta/diesel.svg?branch=master)](https://travis-ci.org/lloydmeta/diesel) [![Maven Central](https://maven-badges.herokuapp.com/maven-central/com.beachape/diesel-core_2.11/badge.svg)](https://maven-badges.herokuapp.com/maven-central/com.beachape/diesel-core_2.11) [![Scala.js](https://www.scala-js.org/assets/badges/scalajs-0.6.15.svg)](https://www.scala-js.org)
 
 > **diesel** *ˈdiːz(ə)l*
->  * Boilerplate-free Tagless Final DSLs via macro annotations, written in [scala.meta](http://scalameta.org/) for future compatibility and other nice things (e.g. free IDE support, like in IntelliJ)
+>  * Boilerplate-free Tagless Final DSLs via macro annotations ([Scastie demo](https://scastie.scala-lang.org/lloydmeta/3WxZcpPXSwW7d8aSDVjHxA)), written in [scala.meta](http://scalameta.org/) for future compatibility and other nice things (e.g. free IDE support, like in IntelliJ)
 >  * What "DSL" sounds like when you say it five times fast
 >  * More torque → more fun
 
@@ -12,14 +12,11 @@ This library provides 2 macros:
 
 To use diesel in your project, [add it to your build](#sbt).
 
-For a runnable example of this library being used for Tagless Final, checkout [this Scastie snippet](https://scastie.scala-lang.org/lloydmeta/3WxZcpPXSwW7d8aSDVjHxA).
-
 ## `@diesel`
 
 The `@diesel` annotation cuts out the boilerplate associated with writing composable Tagless Final DSLs.
 
-The Dsl can be accessed directly from the companion object if you import a converter located in `ops`
-(customisable by passing a name to the annotation as an argument). This are useful when you need to compose multiple DSLs in the context of `F[_]`, but do not want to name all the interpreter parameters.
+Your DSL can be accessed directly from the companion object if you import a converter located in `ops` (customisable by passing a name to the annotation as an argument) and you have an implementation of your DSL in scope. This is useful when you need to compose multiple DSLs in the context of `F[_]`, but do not want to name all the interpreter parameters.
 
 Note that this can be used along-side `@ktrans` (simply write the annotations next to each other).
 
@@ -109,20 +106,35 @@ trait Maths[F[_]] {
 // Helper methods will be added to the algebra's companion object (one will be created if there isn't one yet)
 object Maths {
 
-  def apply[F[_]](implicit m: Maths[F]): Maths[F] = m
-
-  // In charge of aliasing your singleton Maths object to an in-scope Maths[F] :)
+  /** 
+    * In charge of aliasing your singleton Maths object to an in-scope Maths[F].
+    * Simply `import Maths.ops._` :) 
+   **/
   object ops {
     implicit def toDsl[F[_]](o: Maths.type)(implicit m: Maths[F]): Maths[F] = m
   }
+  
+  /**
+    * For when you feel like calling an in-scope interpreter via
+    * `Maths[F]` syntax. Also helpful when you want to import all
+    * the DSL methods using something like
+    * 
+    * ```
+    * val m = Maths[F]
+    * import m._
+    * add(1, 3)
+    * ```
+   **/
+  def apply[F[_]](implicit m: Maths[F]): Maths[F] = m
 }
 ```
 
 
 ## `@ktrans`
 
-The `@ktrans` annotation adds a `transformK` method to a trait that is parameterised by a Kind that takes 1 type parameter.
-It's handy when you want to transform any given implementation of that trait on `F[_]` into one that implements it on `G[_]`.
+The `@ktrans` annotation adds a `transformK` method (customisable by passing a name to the annotation as an argument)
+to a trait/abstract class that is parameterised by a Kind that takes 1 type parameter. It's handy when you want
+to transform any given implementation of that trait on `F[_]` into one that implements it on `G[_]`.
 
 Useful because it saves you from having to write boilerplate (method forwarding and results wrapping) that
 you would otherwise need to deal with manually (or via an IDE) when instantiating a new trait/abstract class.
@@ -195,11 +207,14 @@ trait Maths[G[_]] {
 
 ### Limitations
 
+Because the `@ktrans` annotation's goal is to generate a kind-transformation method for your trait, it is subject to a few limitations:
+
   - Annottee must be parameterised by a higher kinded type with just 1 type parameter (context bounds allowed though)
-  - No unimplemented methods that return types not contained by the kind parameter of the algebra
-  - No unimplemented methods that take arguments parameterised by the same kind as the annottee
+  - No unimplemented methods that return types parameterised by the kind parameter of the algebra
   - No unimplemented type members
   - No vals that are not assignments
+  
+A lot of attention (in fact most of the code in the macro) has been dedicated to outputting understandable compile-time errors for those cases, so please reach out if anything seems amiss.
 
 ## Sbt
 

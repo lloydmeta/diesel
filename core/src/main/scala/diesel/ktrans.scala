@@ -69,7 +69,7 @@ class ktrans(transformMethodName: String = Defaults.TransKMethodName) extends sc
 
   inline def apply(defn: Any): Any = meta {
     val r = internal.KTransImpl.expand(this, defn)
-//    println(r.syntax)
+    // println(r.syntax)
     r
   }
 
