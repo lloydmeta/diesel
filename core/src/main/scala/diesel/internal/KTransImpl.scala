@@ -90,9 +90,9 @@ object KTransImpl {
     def build(): Defn.Def = {
       ensureSoundness()
       val forwardedAbstracts = forwardableAbstracts.flatMap {
-        case origDef: Decl.Val => toForwardedDefnVals(origDef)
-        case origDef: Decl.Def => Seq(toForwardedDefnDef(origDef))
-        case _                 => abort("Oh noes! You found a bug in the macro! Please file an issue :)")
+        case decl: Decl.Val => toForwardedDefnVals(decl)
+        case decl: Decl.Def => Seq(toForwardedDefnDef(decl))
+        case _              => abort("Oh noes! You found a bug in the macro! Please file an issue :)")
       }
 
       q"""
