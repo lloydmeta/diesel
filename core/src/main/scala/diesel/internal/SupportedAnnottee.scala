@@ -26,12 +26,9 @@ trait SupportedAnnottee {
 case class TraitAnnottee(mods: Seq[Mod],
                          tname: Type.Name,
                          tparams: Seq[Type.Param],
-                         template: Template)
+                         template: Template,
+                         underlying: Stat)
     extends SupportedAnnottee {
-
-  def underlying: Stat = {
-    q"..$mods trait $tname[..$tparams] extends $template"
-  }
 
   def appendStat(stat: Stat): Stat = {
     val newTempl =
@@ -50,11 +47,9 @@ case class ClassAnnottee(mods: Seq[Mod],
                          tname: Type.Name,
                          tparams: Seq[Type.Param],
                          ctor: Ctor.Primary,
-                         template: Template)
+                         template: Template,
+                         underlying: Stat)
     extends SupportedAnnottee {
-  def underlying: Stat = {
-    Defn.Class(mods, tname, tparams, ctor, template)
-  }
 
   def appendStat(stat: Stat): Stat = {
     val newTempl =
@@ -74,10 +69,10 @@ case class ClassAnnottee(mods: Seq[Mod],
 object SupportedAnnottee {
 
   def unapply(tree: Tree): Option[SupportedAnnottee] = tree match {
-    case q"..$mods trait $tname[..$tparams] extends $template" =>
-      Some(TraitAnnottee(mods, tname, tparams, template))
-    case Defn.Class(mods, tname, tparams, ctor, template) =>
-      Some(ClassAnnottee(mods, tname, tparams, ctor, template))
+    case stat @ Defn.Trait(mods, tname, tparams, _, template) =>
+      Some(TraitAnnottee(mods, tname, tparams, template, stat))
+    case stat @ Defn.Class(mods, tname, tparams, ctor, template) =>
+      Some(ClassAnnottee(mods, tname, tparams, ctor, template, stat))
     case _ => None
   }
 
