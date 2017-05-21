@@ -3,6 +3,8 @@ package diesel
 import cats._
 import cats.kernel.Monoid
 
+import scala.util.Try
+
 object KtransAnnotationCompileTests {
 
   @ktrans
@@ -11,11 +13,14 @@ object KtransAnnotationCompileTests {
     type Hey = Int
     val eh: Int = 3
 
+    def simpleAbstDefMeth(yo: Int): Option[Either[Boolean, Try[Seq[Double]]]]
+    val simpleAbstValMeth: Option[Either[Boolean, Seq[Try[Double]]]]
+
     def implementedDef(a: Int): Option[Boolean] = None
 
     val valThing, valThing2: F[Int]
     protected val protValThing: F[Option[Int]]
-    protected[diesel] val packProtValThing: F[Option[Int]]
+    protected[diesel] val packProtValThing: F[Option[Try[Either[String,Int]]]]
     private[diesel] val packPrivValThing: F[Option[Int]]
 
     def noArg: F[Int]
@@ -34,8 +39,10 @@ object KtransAnnotationCompileTests {
 
     // The following should fail compilation if uncommented
 //    private def wut: F[Byte]
-//    def hmm(yo: F[Int]): Int
 //    var eh = 9
+//    def hmm(yo: F[Int]): Int
+//    def hmmSuperNestedKParam(yo: Option[Either[Boolean, Try[Seq[F[Double]]]]]): Int
+//    def hmmSuperNestedKRet(yo: Option[Either[Boolean, Try[Seq[Double]]]]): Option[Either[Boolean, Try[Seq[F[Double]]]]]
 //    type Yo[A] = F[A]
 //    protected def shadowGames[F[_]]: F[Int]
 

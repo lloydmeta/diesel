@@ -140,7 +140,7 @@ object KTransImpl {
           (s"Type member shadows the algebra's kind $tparamName[_] (same name or otherwise points to it).",
            typeMemberPointsToKind),
           (s"""This method has a type parameter that shadows the $tparamName[_] used to annotate the trait.
-               |      Besides being confusing for readers of your code, this is not currently supported by diesel.""".stripMargin,
+               |      Besides being confusing for readers of your code, this is not currently supported.""".stripMargin,
            methodsShadowingTParamPF)
         )
       )
@@ -323,12 +323,12 @@ object KTransImpl {
         else
           abstVal.decltpe
       abstVal.pats.map { pat =>
-        val forwardCall = q"""$currentTraitHandle.${pat.name}"""
+        val forwardingCall = q"""$currentTraitHandle.${pat.name}"""
         val body =
           if (declTypeWrappedByAlgKind)
-            q"""$natTransArg.apply($forwardCall)"""
+            q"""$natTransArg.apply($forwardingCall)"""
           else
-            forwardCall
+            forwardingCall
         Defn.Val(abstVal.mods, Seq(pat), Some(newdeclTpe), body)
       }
     }
