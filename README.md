@@ -1,5 +1,7 @@
 # Diesel [![Build Status](https://travis-ci.org/lloydmeta/diesel.svg?branch=master)](https://travis-ci.org/lloydmeta/diesel) [![Maven Central](https://maven-badges.herokuapp.com/maven-central/com.beachape/diesel-core_2.11/badge.svg)](https://maven-badges.herokuapp.com/maven-central/com.beachape/diesel-core_2.11) [![Scala.js](https://www.scala-js.org/assets/badges/scalajs-0.6.15.svg)](https://www.scala-js.org)
 
+[![Join the chat at https://gitter.im/diesel-k/Lobby](https://badges.gitter.im/diesel-k/Lobby.svg)](https://gitter.im/diesel-k/Lobby?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+
 > **diesel** *ˈdiːz(ə)l*
 >  * Boilerplate-free Tagless Final DSLs via macro annotations ([Scastie demo](https://scastie.scala-lang.org/lloydmeta/3WxZcpPXSwW7d8aSDVjHxA)), written in [scala.meta](http://scalameta.org/) for future compatibility and other nice things (e.g. free IDE support, like in IntelliJ)
 >  * What "DSL" sounds like when you say it five times fast
