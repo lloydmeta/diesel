@@ -1,4 +1,4 @@
-# Diesel [![Build Status](https://travis-ci.org/lloydmeta/diesel.svg?branch=master)](https://travis-ci.org/lloydmeta/diesel) [![Maven Central](https://maven-badges.herokuapp.com/maven-central/com.beachape/diesel-core_2.11/badge.svg)](https://maven-badges.herokuapp.com/maven-central/com.beachape/diesel-core_2.11) [![Scala.js](https://www.scala-js.org/assets/badges/scalajs-0.6.15.svg)](https://www.scala-js.org)
+# Diesel [![Build Status](https://travis-ci.org/lloydmeta/diesel.svg?branch=master)](https://travis-ci.org/lloydmeta/diesel) [![Maven Central](https://maven-badges.herokuapp.com/maven-central/com.beachape/diesel-core_2.11/badge.svg)](https://maven-badges.herokuapp.com/maven-central/com.beachape/diesel-core_2.11) [![Scala.js](https://www.scala-js.org/assets/badges/scalajs-0.6.15.svg)](https://www.scala-js.org) [![Join the chat at https://gitter.im/diesel-k/Lobby](https://badges.gitter.im/diesel-k/Lobby.svg)](https://gitter.im/diesel-k/Lobby?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
 > **diesel** *ˈdiːz(ə)l*
 >  * Boilerplate-free Tagless Final DSLs via macro annotations ([Scastie demo](https://scastie.scala-lang.org/lloydmeta/3WxZcpPXSwW7d8aSDVjHxA)), written in [scala.meta](http://scalameta.org/) for future compatibility and other nice things (e.g. free IDE support, like in IntelliJ)
@@ -106,19 +106,19 @@ trait Maths[F[_]] {
 // Helper methods will be added to the algebra's companion object (one will be created if there isn't one yet)
 object Maths {
 
-  /** 
+  /**
     * In charge of aliasing your singleton Maths object to an in-scope Maths[F].
-    * Simply `import Maths.ops._` :) 
+    * Simply `import Maths.ops._` :)
    **/
   object ops {
     implicit def toDsl[F[_]](o: Maths.type)(implicit m: Maths[F]): Maths[F] = m
   }
-  
+
   /**
     * For when you feel like calling an in-scope interpreter via
     * `Maths[F]` syntax. Also helpful when you want to import all
     * the DSL methods using something like
-    * 
+    *
     * ```
     * val m = Maths[F]
     * import m._
@@ -213,7 +213,7 @@ Because the `@ktrans` annotation's goal is to generate a kind-transformation met
   - No unimplemented methods that return types parameterised by the kind parameter of the algebra
   - No unimplemented type members
   - No vals that are not assignments
-  
+
 A lot of attention (in fact most of the code in the macro) has been dedicated to outputting understandable compile-time errors for those cases, so please reach out if anything seems amiss.
 
 ## Sbt
